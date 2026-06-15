@@ -19,7 +19,7 @@ SRC_DIR = Path(__file__).resolve().parent / "src"
 sys.path.insert(0, str(SRC_DIR))
 
 import compute_stable
-from helpers import parse_bb_string, parse_strategy_string
+from helpers import parse_bb_string, parse_strategy_string, validate_update_string
 
 
 RATE_NAMES = {
@@ -116,14 +116,6 @@ def parse_distribution(text, name):
     return distribution
 
 
-def validate_update_string(value, name, expected_length):
-    if len(value) != expected_length:
-        raise ValueError(f"{name} must contain exactly {expected_length} characters.")
-    invalid = set(value) - {"0", "+", "-"}
-    if invalid:
-        raise ValueError(f"{name} contains invalid characters: {sorted(invalid)}.")
-
-
 def validate_strategy_string(value, name, n_rep_states):
     tokens = value.replace("|", ",").split(",")
     expected = n_rep_states**2
@@ -141,8 +133,8 @@ def validate_args(args):
     args.nmeetsc = args.nmeetsc or default_update
     args.strategy_a = args.strategy_a or default_strategy(args.n_rep_states)
 
-    validate_update_string(args.cmeetsn, "cmeetsn", expected_update_length)
-    validate_update_string(args.nmeetsc, "nmeetsc", expected_update_length)
+    validate_update_string(args.cmeetsn, "CmeetsN", args.n_rep_states)
+    validate_update_string(args.nmeetsc, "NmeetsC", args.n_rep_states)
     validate_strategy_string(args.strategy_a, "strategy-a", args.n_rep_states)
     if args.strategy_b:
         validate_strategy_string(args.strategy_b, "strategy-b", args.n_rep_states)

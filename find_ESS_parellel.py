@@ -1,7 +1,6 @@
 # run_bigb_parallel.py
 
 from concurrent.futures import ProcessPoolExecutor
-from itertools import product
 import os
 import time
 import csv
@@ -23,7 +22,7 @@ src_path = Path(__file__).resolve().parents[1] / "ir-python" / "src"
 sys.path.insert(0, str(src_path))
 
 from find_ESS import Find_ESS
-from helpers import parse_bb_string, parse_strategy_string
+from helpers import generate_bb_strings, parse_bb_string, parse_strategy_string
 import compute_payoff
 import compute_stable
 
@@ -186,27 +185,7 @@ def save_results_csv(results, path="ess_results.csv"):
 
 if __name__ == "__main__":
     # Match the tokens/CmeetsN-only setup in make_datas.jl.
-    # Each CmeetsN rule has four S0 positions with [0, +] options and
-    # four S1 positions with [-, 0, +] options: 2^4 * 3^4 = 1296 BigBs.
-    from_s0 = ["0", "+"]
-    from_s1 = ["-", "0", "+"]
-    cmeetsn_options = [
-        "".join(chars)
-        for chars in product(
-            from_s0,
-            from_s1,
-            from_s0,
-            from_s1,
-            from_s0,
-            from_s1,
-            from_s0,
-            from_s1,
-        )
-    ]
-    bigb_names = sorted([
-        f"CmeetsN:{cmeetsn} NmeetsC:00000000"
-        for cmeetsn in cmeetsn_options
-    ])
+    bigb_names = sorted(generate_bb_strings(n_rep_states=2, nmeetsc=False))
 
     strategy_options = [
         f"{a},{b}|{c},{d}"

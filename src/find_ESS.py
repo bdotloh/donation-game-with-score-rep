@@ -160,7 +160,7 @@ class Find_ESS:
 
 if __name__ == "__main__":
     strategy_options = ["0,0|g,g", "0,0|0,0"]
-    bb_string = "CmeetsN:00+00-++ NmeetsC:00-00+--"
+    bb_string = "CmeetsN:00+00-++ NmeetsC:00000+--"
 
     bigb = parse_bb_string(bb_string)
     w_x = np.array([0.1, 0.0, 0.7, 0.0, 0.2])

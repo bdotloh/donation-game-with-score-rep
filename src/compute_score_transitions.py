@@ -1,13 +1,15 @@
 import numpy as np
+from helpers import validate_update_rule_array
 
 class ComputeTransitionRates:
     """
     Compute parameters controlling reputation dynamics of focal player's strategy given update rule 
     and other player's strategy. 
-    
+
 
     """
     def __init__(self,update_rule,strat_focal,strat_other=None,rho_focal=None,n_rep_states=2):
+        validate_update_rule_array(update_rule, n_rep_states)
         self.update_rule = update_rule
         self.strat_focal = strat_focal
         self.strat_other = strat_other
@@ -142,7 +144,7 @@ if __name__ == '__main__':
 
     rho_x = 0.2
 
-    bb_string = "CmeetsN:00+00-++ NmeetsC:00-00+--"
+    bb_string = "CmeetsN:00+00-++ NmeetsC:00000+--"
     strategy_x_string = "0,0|g,g"
     strategy_y_string = "0,0|0,0"
 
@@ -202,4 +204,3 @@ if __name__ == '__main__':
         )
     rates_y = computerates(w_y_states,w_x_states)
     print("rates y:", rates_y)
-    

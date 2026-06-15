@@ -119,7 +119,7 @@ if __name__ == '__main__':
     rho_x = 0.2
     rho_y = 1 - rho_x
     
-    bb_string = "CmeetsN:00+00-++ NmeetsC:00-00+--"
+    bb_string = "CmeetsN:00+00-++ NmeetsC:00000+--"
     strategy_x_string = "0,0|g,g"
     strategy_y_string = "0,0|0,0"
 
