@@ -11,7 +11,8 @@ class OneStepSelf:
         strat_focal, 
         maxw,
         n_rep_states=2,
-        rich_threshold=None
+        rich_threshold=None,
+        save_results_all_iterations=False,
         ):
    
         self.update_rule = update_rule
@@ -19,6 +20,10 @@ class OneStepSelf:
         self.n_rep_states = n_rep_states
         self.rich_threshold = rich_threshold
         self.maxw = maxw
+        self.save_results_all_iterations = save_results_all_iterations
+        self.rates_history = []
+        self.score_history = []
+        self.rep_history = []
         self.compute_rates = ComputeTransitionRates(self.update_rule,self.strat_focal,n_rep_states=n_rep_states)
     
     def __call__(self, w):
@@ -35,6 +40,12 @@ class OneStepSelf:
         elif self.n_rep_states == 3:
             Q = makeQ.three_rep_state(*self.rates,n_w,rich_threshold=self.rich_threshold)
         w_focal_new = (np.eye(n_w) + Q).T @ w
+        if self.save_results_all_iterations:
+            self.rates_history.append(np.array(self.rates, copy=True))
+            self.score_history.append(np.array(w_focal_new, copy=True))
+            self.rep_history.append(
+                transform_distribution_into_states(w_focal_new, self.rich_threshold)
+            )
         return w_focal_new
 
 class OneStep:
@@ -46,7 +57,8 @@ class OneStep:
         rho_focal, 
         maxw,
         n_rep_states=2,
-        rich_threshold=None
+        rich_threshold=None,
+        save_results_all_iterations=False,
         ):
 
         self.update_rule = update_rule
@@ -56,6 +68,10 @@ class OneStep:
         self.n_rep_states = n_rep_states
         self.rich_threshold = rich_threshold
         self.maxw = maxw
+        self.save_results_all_iterations = save_results_all_iterations
+        self.rates_history = []
+        self.score_history = []
+        self.rep_history = []
 
         self.transform_score2state_dist = Score2StateDistribution(self.rich_threshold)
         self.compute_rates = ComputeTransitionRates(
@@ -86,6 +102,11 @@ class OneStep:
         elif self.n_rep_states == 3:
             Q = makeQ.three_rep_state(*self.rates,n_w,rich_threshold=self.rich_threshold)
         w_focal_new = (np.eye(n_w) + Q).T @ w_focal
+
+        if self.save_results_all_iterations:
+            self.rates_history.append(np.array(self.rates, copy=True))
+            self.score_history.append(np.array(w_focal_new, copy=True))
+            self.rep_history.append(self.transform_score2state_dist(w_focal_new))
 
         return w_focal_new
 

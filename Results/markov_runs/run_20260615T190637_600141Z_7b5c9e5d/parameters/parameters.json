@@ -1,0 +1,25 @@
+{
+  "big_brother": {
+    "CmeetsN": "000-0-++",
+    "NmeetsC": "00000000"
+  },
+  "strategy_A": "0,0|g,g",
+  "strategy_B": "0,0|0,0",
+  "proportion_strategy_A": 0.9,
+  "proportion_strategy_B": 0.09999999999999998,
+  "n_rep_states": 2,
+  "rich_threshold": null,
+  "maxw": 100,
+  "maxn": 500,
+  "tolerance": 1e-05,
+  "save_results_all_iterations": true,
+  "initial_score_distribution_A": [
+    0.5,
+    0.5
+  ],
+  "initial_score_distribution_B": [
+    0.5,
+    0.5
+  ],
+  "iterations_completed": 500
+}

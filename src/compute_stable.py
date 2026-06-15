@@ -32,6 +32,8 @@ def with_1strategy(
     tolerance=1e-5,
     force_until_maxn=False,
     return_prev_w=False,
+    save_results_all_iterations=False,
+    stop_when_transient=True,
     ):
     # Check that n_rep_states is valid
     if n_rep_states not in (2, 3):
@@ -41,7 +43,14 @@ def with_1strategy(
     if n_rep_states == 3 and (rich_threshold is None or rich_threshold <= 0):
         raise ValueError("For n_rep_states=3, rich_threshold must be a positive integer (>0).")
     
-    onestep = OneStepSelf(bb,strat,maxw,n_rep_states,rich_threshold)
+    onestep = OneStepSelf(
+        bb,
+        strat,
+        maxw,
+        n_rep_states,
+        rich_threshold,
+        save_results_all_iterations=save_results_all_iterations,
+    )
     w_curr = w_init
     w_prev = w_curr
     len_w_init = len(w_init)
@@ -51,7 +60,7 @@ def with_1strategy(
         chg = _max_abs_change(w_curr, w_prev)
 
         # All initial low-score bins are empty: the chain is transient.
-        if np.sum(w_curr[:len_w_init]) == 0.0:
+        if stop_when_transient and np.sum(w_curr[:len_w_init]) == 0.0:
             break
         if chg <= tolerance and not force_until_maxn:
             break
@@ -60,6 +69,10 @@ def with_1strategy(
     results['w'] = w_curr
     results['w_prev_state'] = w_prev_states
     results['trans'] = onestep.rates
+    if save_results_all_iterations:
+        results['trans_history'] = onestep.rates_history
+        results['score_history'] = onestep.score_history
+        results['rep_history'] = onestep.rep_history
     return results
   
 def with_2strategies(
@@ -75,6 +88,8 @@ def with_2strategies(
     rich_threshold=None,
     tolerance=1e-5,
     force_until_maxn=False,
+    save_results_all_iterations=False,
+    stop_when_transient=True,
     ):
     # Check that n_rep_states is valid
     if n_rep_states not in (2, 3):
@@ -84,8 +99,26 @@ def with_2strategies(
     if n_rep_states == 3 and (rich_threshold is None or rich_threshold <= 0):
         raise ValueError("For n_rep_states=3, rich_threshold must be a positive integer (>0).")
 
-    onestepA = OneStep(bb,stratA,stratB,rhoA,maxw,n_rep_states,rich_threshold)
-    onestepB = OneStep(bb,stratB,stratA,1-rhoA,maxw,n_rep_states,rich_threshold)
+    onestepA = OneStep(
+        bb,
+        stratA,
+        stratB,
+        rhoA,
+        maxw,
+        n_rep_states,
+        rich_threshold,
+        save_results_all_iterations=save_results_all_iterations,
+    )
+    onestepB = OneStep(
+        bb,
+        stratB,
+        stratA,
+        1-rhoA,
+        maxw,
+        n_rep_states,
+        rich_threshold,
+        save_results_all_iterations=save_results_all_iterations,
+    )
 
     wA_curr = wA_init
     wB_curr = wB_init
@@ -106,7 +139,7 @@ def with_2strategies(
         )
 
         # Both strategies have emptied their initial low-score bins.
-        if (
+        if stop_when_transient and (
             np.sum(wA_curr[:len_wA_init]) == 0.0
             and np.sum(wB_curr[:len_wB_init]) == 0.0
         ):
@@ -125,6 +158,13 @@ def with_2strategies(
     resultsB['w'] = wB_curr
     resultsB['w_prev_state'] = wB_states_final
     resultsB['trans']= onestepB.rates
+    if save_results_all_iterations:
+        resultsA['trans_history'] = onestepA.rates_history
+        resultsA['score_history'] = onestepA.score_history
+        resultsA['rep_history'] = onestepA.rep_history
+        resultsB['trans_history'] = onestepB.rates_history
+        resultsB['score_history'] = onestepB.score_history
+        resultsB['rep_history'] = onestepB.rep_history
 
     return resultsA, resultsB
 
