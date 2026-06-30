@@ -18,7 +18,7 @@ except ImportError:
             yield result
         print()
 
-src_path = Path(__file__).resolve().parents[1] / "ir-python" / "src"
+src_path = Path(__file__).resolve().parents[2] / "src"
 sys.path.insert(0, str(src_path))
 
 from find_ESS import Find_ESS
@@ -103,11 +103,11 @@ def find_ess_parallel_over_bigb(
     w_init,
     rhoA=0.99,
     maxn=100,
-    maxw=100,
+    maxw=2,
     benefit=2,
     cost=1,
     n_rep_states=2,
-    rich_threshold=None,
+    rich_threshold=3,
     fit_threshold=1e-5,
     n_workers=None,
 ):
@@ -185,8 +185,9 @@ def save_results_csv(results, path="ess_results.csv"):
 
 if __name__ == "__main__":
     # Match the tokens/CmeetsN-only setup in make_datas.jl.
-    bigb_names = sorted(generate_bb_strings(n_rep_states=2, nmeetsc=False))
-
+    bigb_names = sorted(generate_bb_strings(n_rep_states=3, nmeetsc=True))
+    print(len(bigb_names))
+    exit()
     strategy_options = [
         f"{a},{b}|{c},{d}"
         for a in ["0", "g"]

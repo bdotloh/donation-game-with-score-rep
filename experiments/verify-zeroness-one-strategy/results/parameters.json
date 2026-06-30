@@ -1,0 +1,15 @@
+{
+  "n_rep_states": 2,
+  "cmeetsn": true,
+  "nmeetsc": false,
+  "initial_score_distribution": [
+    0.5,
+    0.5
+  ],
+  "maxw": 100,
+  "maxn": 500,
+  "tolerance": 1e-05,
+  "bigb_count": 1296,
+  "strategy_count": 16,
+  "combo_count": 20736
+}

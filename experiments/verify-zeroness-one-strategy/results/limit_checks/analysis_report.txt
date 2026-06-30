@@ -1,0 +1,334 @@
+EMPIRICAL ANALYSIS OF TWO-REPUTATION-STATE TRANSITION GROUPS
+=============================================================
+
+Purpose
+-------
+
+This analysis checks proposed limiting behavior for score-distribution Markov
+chains grouped by whether their initial transition probabilities alpha, beta,
+and gamma are zero or positive.
+
+The results are empirical numerical evidence, not mathematical proofs.
+
+
+1. Fixed experimental setup
+---------------------------
+
+The analysis used:
+
+  - Two reputation states.
+  - CmeetsN enabled.
+  - NmeetsC fixed to all zeros.
+  - Initial score distribution:
+
+        w_0 = [0.5, 0.5, 0, ..., 0]
+
+    Therefore P(w_0 = 0) = 0.5 and P(w_0 = 1) = 0.5.
+
+  - Maximum score: maxw = 100.
+  - Every valid CmeetsN rule: 1,296 rules.
+  - Every binary strategy: 16 strategies.
+  - Total combinations: 1,296 * 16 = 20,736.
+
+
+2. How the combinations were initially grouped
+----------------------------------------------
+
+For every (BigB, strategy) combination:
+
+  1. Parse the BigB update rule and strategy.
+  2. Calculate alpha(w_0), beta(w_0), and gamma(w_0).
+  3. Classify each rate as either exactly zero or positive.
+  4. Assign the combination to one of eight groups.
+
+The eight group sizes were:
+
+  a. alpha=0, beta=0, gamma=0:       576
+  b. alpha=0, beta>0, gamma=0:     1,728
+  c. alpha>0, beta=0, gamma=0:     1,728
+  d. alpha>0, beta>0, gamma=0:     5,184
+  e. alpha=0, beta=0, gamma>0:     1,728
+  f. alpha=0, beta>0, gamma>0:     1,152
+  g. alpha>0, beta=0, gamma>0:     5,184
+  h. alpha>0, beta>0, gamma>0:     3,456
+
+
+3. How the limiting claims were checked
+---------------------------------------
+
+The initial 500-step batch was not sufficient to reliably identify all limits,
+because some chains converge algebraically slowly.
+
+For the limit checks:
+
+  1. Each chain was represented using a fixed score vector of length 101,
+     corresponding to scores 0 through 100.
+  2. Each chain was evolved for up to 100,000 steps.
+  3. A chain was marked stationary if its largest one-step probability change
+     was at most 1e-12.
+  4. A proposed limiting condition was marked as numerically satisfied when
+     its error was at most 1e-6.
+
+The rates depend only on P(w_t=0), and each rate is affine in P(w_t=0).
+Therefore, the rate functions are completely identified by their values at
+P(w_t=0)=0 and P(w_t=0)=1.
+
+Using these endpoint values showed that the 20,736 combinations reduce to only
+36 unique nonlinear rate functions. The 36 unique dynamics were solved, and
+their results were mapped back to all 20,736 combinations.
+
+
+4. Results for the proposed hypotheses
+--------------------------------------
+
+a. alpha=0, beta=0, gamma=0
+
+Expected:
+
+  P(w_t=n) remains equal to P(w_0=n) for every score n.
+
+Result:
+
+  Empirically true for all 576 combinations.
+  The distribution remains exactly [0.5, 0.5, 0, ..., 0].
+
+
+b. alpha=0, beta>0, gamma=0
+
+Expected:
+
+  lim P(w_t=0) = P(w_0=0) = 0.5
+  lim P(w_t=maxw) = 1 - P(w_0=0) = 0.5
+
+Result:
+
+  Empirically true for all 1,728 combinations.
+  Final P(0) was 0.5 and final P(100) was approximately 0.5.
+
+
+c. alpha>0, beta=0, gamma=0
+
+Expected:
+
+  lim P(w_t=1) = P(w_0=0) + P(w_0=1) = 1
+  Scores n>=2 retain their initial mass.
+
+Result:
+
+  Consistent with the hypothesis for all 1,728 combinations.
+
+  Of these, 1,152 reached the strict stationary threshold. The remaining 576
+  converged very slowly. After 100,000 steps, their remaining P(0) was about
+  0.000039993, with the rest at score 1.
+
+  There were no observed counterexamples. The numerical residual is consistent
+  with slow convergence toward the proposed limit.
+
+
+d. alpha>0, beta>0, gamma=0
+
+Expected:
+
+  lim P(w_t=maxw) = 1.
+
+Result:
+
+  False in general.
+
+  Only 2,304 of 5,184 combinations satisfied P(maxw)=1 within the numerical
+  criterion. There are genuine converged counterexamples.
+
+  The reason is that beta(w_0)>0 only describes beta at the initial
+  distribution. For some combinations, beta(w_t) approaches zero as P(w_t=0)
+  approaches zero. Upward movement then stops before all mass reaches maxw.
+
+  Observed counterexample outcomes included distributions frozen over low
+  scores with:
+
+    - Mean score approximately 1.357143 and effective support through score 6.
+    - Mean score approximately 1.5 and effective support through score 7.
+
+  Other cases did move all mass to maxw.
+
+
+e. alpha=0, beta=0, gamma>0
+
+Expected:
+
+  lim P(w_t=0) = 1.
+
+Result:
+
+  Consistent with the hypothesis for all 1,728 combinations.
+
+  Of these, 1,152 reached the strict stationary threshold. The remaining 576
+  converged slowly. After 100,000 steps, their remaining mass above zero was
+  about 0.000039993.
+
+  There were no observed counterexamples.
+
+
+f. alpha=0, beta>0, gamma>0
+
+Expected:
+
+  lim P(w_t=0) = P(w_0=0) + y,
+  where y is between 0 and 1-P(w_0=0).
+
+Result:
+
+  Empirically true for all 1,152 combinations.
+
+  There were only two distinct stationary outcomes:
+
+    1. P(0) approximately 1.
+
+       All mass eventually moved to score 0.
+
+    2. P(0) approximately 0.749478659,
+       P(maxw) approximately 0.166781875,
+       mean score approximately 24.92635.
+
+       This is a mixed boundary outcome: substantial mass remains at score 0,
+       while substantial mass reaches maxw.
+
+
+g. alpha>0, beta=0, gamma>0
+
+Expected:
+
+  The support of the distribution remains fixed by the initial distribution.
+
+Result:
+
+  Empirically true for all 5,184 combinations.
+
+  Because beta is zero, no mass can move from score 1 to score 2. Starting from
+  support {0,1}, the support remains within {0,1}.
+
+  Multiple equilibria occur. Observed limiting P(0) values were approximately:
+
+    - 0
+    - 0.381966011
+    - 0.5
+    - 0.618033989
+    - 1
+
+  The values 0.381966011 and 0.618033989 are the golden-ratio conjugate values:
+
+    (3 - sqrt(5)) / 2 approximately 0.381966011
+    (sqrt(5) - 1) / 2 approximately 0.618033989
+
+  Some cases approach 0 or 1 only algebraically slowly.
+
+
+h. alpha>0, beta>0, gamma>0
+
+The original list repeated the g condition for h. This analysis treats h as
+the missing eighth case in which all three initial rates are positive.
+
+Result:
+
+  Initial positivity of all rates does not determine a unique limiting form.
+  Six distinct rate-function behaviors were observed.
+
+  Three broad outcomes occurred:
+
+    1. All mass moved to maxw.
+
+    2. Mass approached maxw very slowly.
+
+    3. The chain converged to a low-score stationary distribution rather than
+       maxw.
+
+  The low-score stationary outcomes included:
+
+    - P(0) approximately 0.292893219,
+      mean score approximately 1.207107.
+
+    - P(0) approximately 1/3,
+      mean score approximately 4/3.
+
+    - P(0) approximately 0.381966011,
+      mean score approximately 1.618034.
+
+
+5. Additional observations beyond the hypotheses
+-------------------------------------------------
+
+Observation 1: Initial rate signs are not enough to determine the limit.
+
+The groups use alpha(w_0), beta(w_0), and gamma(w_0). However, the rates change
+with P(w_t=0). A rate that is initially positive can later approach zero.
+
+This explains why hypothesis d fails and why h has several different outcomes.
+A stronger classification should include the full rate functions, or at least
+their endpoint values at P(w_t=0)=0 and P(w_t=0)=1.
+
+
+Observation 2: There are only 36 unique dynamics among 20,736 combinations.
+
+Many different BigB and strategy combinations generate exactly the same alpha,
+beta, and gamma functions. Grouping by the endpoint rate signature greatly
+reduces the analysis without changing the induced score dynamics.
+
+
+Observation 3: Some convergence is algebraically slow.
+
+Several groups contain chains that had not reached the strict 1e-12 stationary
+threshold after 100,000 steps, even though their behavior consistently
+approached the proposed limit.
+
+For example, residual masses of approximately 0.000039993 remained in some c
+and e chains. This is why finite-time results should not automatically be
+interpreted as limiting counterexamples.
+
+
+Observation 4: Zero beta creates an invariant support boundary.
+
+When beta=0 throughout the trajectory, mass cannot move upward from positive
+scores. For the chosen initial distribution supported on {0,1}, the support
+therefore remains within {0,1}. This gives a structural explanation for g.
+
+
+Observation 5: Boundary mixtures can persist.
+
+Group f contains a stationary outcome with mass at both score 0 and maxw.
+Therefore, having both beta and gamma initially positive does not imply that
+the stationary distribution is concentrated in the interior.
+
+
+Observation 6: Golden-ratio-related equilibria appear repeatedly.
+
+The values near 0.381966 and 0.618034 occur in group g, and 0.381966 also
+appears in group h. These values arise from fixed points of the nonlinear
+rate/distribution feedback, rather than from numerical noise.
+
+
+Observation 7: maxw affects boundary-concentrated outcomes.
+
+Outcomes that accumulate mass at score 100 depend on the imposed maxw=100
+boundary. Low-score equilibria and invariant-support outcomes are less
+sensitive to maxw, provided maxw remains above their effective support.
+
+
+6. Output files
+---------------
+
+Initial grouping:
+
+  Results/initial_transition_groups/combinations.csv
+  Results/initial_transition_groups/group_summary.csv
+  Results/initial_transition_groups/parameters.json
+
+Limit checks:
+
+  Results/initial_transition_groups/limit_checks/combination_limit_checks.csv
+  Results/initial_transition_groups/limit_checks/condition_summary.csv
+  Results/initial_transition_groups/limit_checks/parameters.json
+
+Scripts:
+
+  group_chains_by_initial_transitions.py
+  verify_transition_group_limits.py
+

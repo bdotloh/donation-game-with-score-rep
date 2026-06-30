@@ -1,0 +1,9 @@
+{
+  "input": "Results/initial_transition_groups/combinations.csv",
+  "output_dir": "Results/initial_transition_groups/limit_checks",
+  "maxw": 100,
+  "max_steps": 100000,
+  "stationary_tolerance": 1e-12,
+  "claim_tolerance": 1e-06,
+  "workers": 7
+}

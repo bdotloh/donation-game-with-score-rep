@@ -1,0 +1,9 @@
+alpha_positive,beta_positive,gamma_positive,group,combo_count
+0,0,0,"alpha=0,beta=0,gamma=0",576
+0,0,1,"alpha=0,beta=0,gamma>0",1728
+0,1,0,"alpha=0,beta>0,gamma=0",1728
+0,1,1,"alpha=0,beta>0,gamma>0",1152
+1,0,0,"alpha>0,beta=0,gamma=0",1728
+1,0,1,"alpha>0,beta=0,gamma>0",5184
+1,1,0,"alpha>0,beta>0,gamma=0",5184
+1,1,1,"alpha>0,beta>0,gamma>0",3456
