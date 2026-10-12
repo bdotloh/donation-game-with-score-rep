@@ -1,0 +1,4 @@
+numpy
+scipy
+dash>=3
+plotly>=5.15

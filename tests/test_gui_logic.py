@@ -1,0 +1,140 @@
+"""GUI logic that doesn't need a browser: input checks, settings, figures."""
+
+import numpy as np
+import pytest
+
+from engine import BinaryStrategy, PhiDisc, TernaryStrategy
+from gui import figures, spec, validation
+from gui.pages.parameters import experiment_from_inputs
+
+
+@pytest.mark.parametrize(
+    "values",
+    [["33.33", "33.33", "33.33"], ["0.3333", "0.3333", "0.3333"], ["1/3", "1/3", "1/3"], ["50", "50"],
+     ["33.33%", "33.33%", "33.34%"]],
+)
+def test_shares_accept_rounded_fractions_and_percentages(values):
+    shares, error = validation.shares(values)
+    assert error == ""
+    np.testing.assert_allclose(shares.sum(), 1.0)
+    np.testing.assert_allclose(shares, np.full(len(values), 1 / len(values)), atol=1e-3)
+
+
+def test_shares_mixed_types():
+    np.testing.assert_allclose(validation.shares([0.25, "0.75"])[0], [0.25, 0.75])
+
+
+@pytest.mark.parametrize("values", [["0.5", "0.4"], ["30", "30", "30"], ["0.5", "abc"], ["-0.5", "1.5"], ["", "1"]])
+def test_shares_reject_bad_input(values):
+    shares, error = validation.shares(values)
+    assert shares is None and error
+
+
+def test_score_distribution():
+    entries = [{"score": 0, "mass": 0.25}, {"score": 3, "mass": 0.75}]
+    w, error = validation.score_distribution(entries)
+    assert error == ""
+    np.testing.assert_allclose(w, [0.25, 0, 0, 0.75])
+    assert validation.score_distribution([{"score": 0, "mass": 0.5}])[1]
+    assert validation.score_entry("1.5", "0.2")[1]
+    assert validation.score_entry("2", "-1")[1]
+    assert validation.score_entry("2", "0.2") == ({"score": 2, "mass": 0.2}, "")
+
+
+def test_noise():
+    assert validation.noise("0.1", "0.3", "0.7")[1] == ""
+    assert validation.noise("1.5", "0.5", "0.5")[1]
+    assert validation.noise("0.1", "0.3", "0.6")[1]
+    assert validation.noise("0.1", "0.333", "0.667")[0]["eps_up"] == pytest.approx(0.333)
+
+
+def test_presets():
+    assert BinaryStrategy(spec.preset_strategy("AllD-Disc")["P"]).name == "0,0|0,g"
+    assert BinaryStrategy(spec.preset_strategy("Disc-Disc")["P"]).name == "0,0|g,g"
+    assert BinaryStrategy(spec.preset_strategy("Cooperators")["P"]).name == "g,g|g,g"
+    assert BinaryStrategy(spec.preset_strategy("Defectors")["P"]).name == "0,0|0,0"
+    for barcode in spec.NORM_PRESETS.values():
+        spec.norm_from_barcode(barcode, "binary")
+
+
+def _experiment():
+    strategies = [spec.preset_strategy("AllD-Disc"), spec.preset_strategy("Defectors"),
+                  {"type": "phi", "name": "phi", "P": None, "tau": None, "phi": 1.0}]
+    cn, nc = "00000-00", "00000000"
+    return experiment_from_inputs(
+        strategies, ["33.33", "33.33", "33.33"], [{"score": 0, "mass": 0.5}, {"score": 1, "mass": 0.5}],
+        "binary", None, list(cn), list(nc), "0.1", "0.4", "0.6", "0.5", "2", "1", "0.5", "10", "200", "1e-6", "4")
+
+
+def test_experiment_round_trip():
+    experiment, error = _experiment()
+    assert error == ""
+    assert spec.check(experiment) == ""
+    built = spec.build(experiment)
+    np.testing.assert_allclose(built["rho0"], [1 / 3] * 3)
+    np.testing.assert_allclose(built["w_init"], [0.5, 0.5])
+    assert built["names"] == ["AllD-Disc", "Defectors", "phi"]
+
+
+def test_experiment_errors():
+    strategies = [spec.preset_strategy("AllD-Disc"), spec.preset_strategy("Defectors")]
+    args = [["0.5", "0.5"], [{"score": 0, "mass": 1.0}], "binary", None, list("00000-00"), list("00000000"),
+            "0.1", "0.4", "0.6", "0.5", "2", "1", "0.5", "10", "200", "1e-6", "4"]
+    assert experiment_from_inputs(strategies, *args)[1] == ""
+    bad = list(args)
+    bad[0] = ["0.5", "0.6"]
+    assert "Shares" in experiment_from_inputs(strategies, *bad)[1]
+    bad = list(args)
+    bad[7] = "0.3"
+    assert "Noise" in experiment_from_inputs(strategies, *bad)[1]
+    bad = list(args)
+    bad[4] = list("-0000000")
+    assert "Norm" in experiment_from_inputs(strategies, *bad)[1]
+    assert "2 or 3" in experiment_from_inputs(strategies[:1], *args)[1]
+
+
+@pytest.mark.parametrize("strategy", [BinaryStrategy.from_name("0,0|0,g"), TernaryStrategy.from_name(
+    "0,0,0|0,g,0.5|0,g,g", tau=2), PhiDisc(1)])
+def test_strategy_surface(strategy):
+    values = figures.help_surface_values(strategy, 6)
+    assert values.shape == (7, 7)
+    assert np.all((values >= 0) & (values <= 1))
+    fig = figures.strategy_surface(strategy, 6)
+    assert fig.data[0].z.shape[0] == fig.data[0].z.shape[1]
+
+
+def test_phi_disc_surface_values():
+    values = figures.help_surface_values(PhiDisc(1), 4)   # [donor, receiver]
+    np.testing.assert_allclose(values[:, 0], 0)          # receiver without a score is never helped
+    np.testing.assert_allclose(values[:, 2], [0, 1, 1 / 2, 1 / 3, 1 / 4])
+
+
+def test_simplex_figures():
+    names = ["A", "B", "C"]
+    grid = np.array([[1, 0, 0], [0.5, 0.5, 0], [0.2, 0.3, 0.5], [0, 0, 1]])
+    velocities = np.array([[0, 0, 0], [0.1, -0.1, 0], [0.01, 0.02, -0.03], [0, 0, 0]])
+    rest = [{"rho": [1, 0, 0], "kind": "stable", "eigenvalues": [-0.1, -0.2], "converged": True},
+            {"rho": [0, 0, 1], "kind": "saddle", "eigenvalues": [-0.1, 0.2], "converged": False}]
+    fig = figures.simplex_figure(names, grid, velocities, [True, True, False, True], rest,
+                                 trajectory=grid[:3], current=grid[2])
+    assert fig.data[-1].name == "selected"
+    fig = figures.simplex_figure(names[:2], np.array([[1, 0], [0.5, 0.5], [0, 1]]),
+                                 np.array([[0, 0], [0.1, -0.1], [0, 0]]), [True] * 3, [], current=[0.5, 0.5])
+    assert fig.data[-1].name == "selected"
+    np.testing.assert_allclose(figures.from_xy(*[c[0] for c in figures.to_xy([0.2, 0.3, 0.5])]), [0.2, 0.3, 0.5])
+
+
+def test_histogram_and_heatmaps():
+    w = np.array([[0.5, 0.3, 0.2, 0], [0.1, 0.2, 0.3, 0.4]])
+    fig = figures.score_histogram(["A", "B"], [0.25, 0.75], w, hidden=["B"])
+    assert {t.name for t in fig.data if t.showlegend is not False} == {"A", "population"}
+    figures.matrix_heatmap(np.array([[0.1, -0.2], [0.3, 0.0]]), ["A", "B"], "A", "strategy", "against", diverging=True)
+
+
+def test_click_composition():
+    from gui.pages.results import click_composition
+
+    assert click_composition({"points": [{"customdata": [0.2, 0.8]}]}) == [0.2, 0.8]
+    assert click_composition({"points": [{"customdata": {"1": 0.8, "0": 0.2}}]}) == [0.2, 0.8]
+    assert click_composition({"points": [{}]}) is None
+    assert click_composition({"points": [{"customdata": ["a"]}]}) is None

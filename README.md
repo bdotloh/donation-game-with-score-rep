@@ -78,6 +78,29 @@ out), payoffs come from the distribution after `max_iter` steps, so they
 depend on `w_init` and `max_iter`. `warm_start=True` continues the chains from
 the previous step instead.
 
+## GUI
+
+```
+pip install -r requirements.txt
+python -m gui            # then open http://127.0.0.1:8050
+```
+
+1. **Strategies**: pick binary, ternary or φ-Disc (or a preset), fill in p(help)
+   for each decision point and add it; the 3D plot shows p(help) over receiver
+   and donor scores. Choose 2 or 3.
+2. **Parameters**: initial shares (fractions or percentages, e.g. 33.33 three
+   times), initial score distribution, scoring norm (binary or ternary, one
+   dropdown per case, or paste a barcode), noise ε, ε↑, ε↓ (ε↑ + ε↓ = 1), the
+   probability q of being able to help, benefit and cost. Settings can be saved
+   and loaded as JSON.
+3. **Results**: the simplex (a line for 2 strategies, a triangle for 3) with
+   arrows coloured and sized by speed, rest points (black stable, white
+   unstable, gray saddle) and the trajectory from the initial shares. Click the
+   simplex or type shares to see the score distributions, payoffs and helping
+   rates there; press Play to step through the trajectory. Figures download as
+   PNG or SVG from each plot's toolbar; "Download data" gives the trajectory,
+   vector field, rest points and selected point as CSV/JSON.
+
 ## Tests
 
 ```
