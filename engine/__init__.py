@@ -13,6 +13,7 @@ from .partitions import PossessionPartition, ScorePartition, TernaryPartition
 from .payoffs import Payoffs
 from .population import Population
 from .rates import Rates, TransitionRates
+from .replicator import ReplicatorDynamics, Trajectory
 from .solver import StableScores, StableScoreSolver
 from .strategies import (
     BinaryStrategy,
