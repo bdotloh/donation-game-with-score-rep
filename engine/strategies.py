@@ -106,7 +106,11 @@ class TernaryStrategy(ClassStrategy):
 
 class PhiDisc(Strategy):
     """phi-Disc: don't help when score-less, else help a receiver with positive
-    score with probability j^(-phi), j being the donor's score (phi >= 0)."""
+    score with probability j^(-phi), j being the donor's score (phi >= 0).
+
+    The notes study it under CN:00000-0+ NC:00000000: a Can with a positive score
+    gains one by helping a Need with a positive score, and loses one by declining.
+    """
 
     def __init__(self, phi):
         if phi < 0:
