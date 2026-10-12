@@ -14,6 +14,7 @@ from .payoffs import Payoffs
 from .population import Population
 from .rates import Rates, TransitionRates
 from .replicator import ReplicatorDynamics, Trajectory
+from .simplex import PointResult, ReplicatorField, RestPoint, find_rest_points, simplex_grid
 from .solver import StableScores, StableScoreSolver
 from .strategies import (
     BinaryStrategy,

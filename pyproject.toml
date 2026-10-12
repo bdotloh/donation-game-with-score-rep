@@ -1,3 +1,5 @@
 [tool.pytest.ini_options]
 pythonpath = ["."]
 testpaths = ["tests"]
+markers = ["e2e: drives the GUI in a browser (run with -m e2e)"]
+addopts = "-m 'not e2e'"

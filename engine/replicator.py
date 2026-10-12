@@ -75,7 +75,9 @@ class ReplicatorDynamics:
         pi = self.payoff_matrix(population, w) @ rho
         return rho * (pi - rho @ pi), pi
 
-    def run(self, strategies, rho, w_init, n_steps, record_scores=False):
+    def run(self, strategies, rho, w_init, n_steps, record_scores=False, progress=None):
+        """Evolve rho for n_steps steps of size dt (or until a rest point). progress(done, total) is
+        called after each step."""
         rho = np.asarray(rho, dtype=float)
         w = w_init
         rows = []
@@ -90,6 +92,8 @@ class ReplicatorDynamics:
             rows.append((step * self.dt, rho, pi, w[:, 0], w @ np.arange(w.shape[1]), converged))
             if record_scores:
                 scores.append(w)
+            if progress is not None:
+                progress(step + 1, n_steps + 1)
             if np.abs(drho).max() <= self.rest_tol:
                 at_rest = True
                 break

@@ -76,3 +76,19 @@ def test_extinct_strategies_stay_extinct_and_rest_points_stop():
     trajectory = dynamics.run([Discriminators(), Defectors()], [1.0, 0.0], [0.5, 0.5], 100)
     assert trajectory.at_rest and len(trajectory.t) == 1
     np.testing.assert_array_equal(trajectory.rho[-1], [1.0, 0.0])
+
+
+def test_role_factor_scales_interaction_rates():
+    """Without noise, rates and payoffs scale with q(1 - q)."""
+    from engine.rates import role_factor
+
+    norm = ScoringNorm.from_barcode("CN:00000-0+ NC:00000+-0")
+    population = Population([Discriminators(), Defectors()], [0.6, 0.4])
+    w = np.array([[0.3, 0.4, 0.3], [0.5, 0.25, 0.25]])
+    base = StableScoreSolver(norm, Noise(0)).rates(population, w)
+    q = 0.2
+    scaled = StableScoreSolver(norm, Noise(0), role_factor=role_factor(q)).rates(population, w)
+    np.testing.assert_allclose(scaled.G, base.G * q * (1 - q) / 0.25, atol=1e-15)
+    np.testing.assert_allclose(scaled.F, base.F * q * (1 - q) / 0.25, atol=1e-15)
+    pay = Payoffs(role_factor=role_factor(q))(population, w)
+    np.testing.assert_allclose(pay, Payoffs()(population, w) * q * (1 - q) / 0.25, atol=1e-15)

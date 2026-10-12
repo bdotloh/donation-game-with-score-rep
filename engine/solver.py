@@ -14,7 +14,7 @@ import numpy as np
 from . import chain
 from .noise import Noise
 from .population import score_array
-from .rates import TransitionRates
+from .rates import ROLE_FACTOR, TransitionRates
 
 
 @dataclass
@@ -43,10 +43,11 @@ class StableScoreSolver:
         stop_when_transient=True,
         force_max_iter=False,
         record_history=False,
+        role_factor=ROLE_FACTOR,
     ):
         self.norm = norm
         self.noise = noise or Noise()
-        self.rates = TransitionRates(norm, self.noise)
+        self.rates = TransitionRates(norm, self.noise, role_factor)
         self.tol = tol
         self.max_iter = max_iter
         self.stop_when_transient = stop_when_transient
@@ -57,7 +58,7 @@ class StableScoreSolver:
         """Copy of this solver with some settings (tol, max_iter, ...) changed."""
         solver = copy.copy(self)
         for name, value in options.items():
-            if not hasattr(solver, name) or name in ("norm", "noise", "rates"):
+            if not hasattr(solver, name) or name in ("norm", "noise", "rates", "role_factor"):
                 raise ValueError(f"Cannot change {name!r}; make a new solver instead.")
             setattr(solver, name, value)
         return solver

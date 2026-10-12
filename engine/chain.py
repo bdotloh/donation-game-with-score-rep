@@ -9,8 +9,10 @@ import numpy as np
 
 def extend(w):
     """Append an empty top score if any chain has mass there, so mass can always move up."""
-    if np.any(w[:, -1] != 0.0):
-        w = np.pad(w, ((0, 0), (0, 1)))
+    if w[:, -1].any():
+        wider = np.zeros((w.shape[0], w.shape[1] + 1))
+        wider[:, :-1] = w
+        return wider
     return w
 
 

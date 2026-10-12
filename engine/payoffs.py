@@ -2,7 +2,7 @@
 
 import numpy as np
 
-from .rates import ROLE_FACTOR
+from .rates import ROLE_FACTOR, _Cache
 
 
 class Payoffs:
@@ -10,18 +10,12 @@ class Payoffs:
         self.benefit = benefit
         self.cost = cost
         self.role_factor = role_factor
+        self._cache = _Cache()
 
     def help_probabilities(self, population, w):
         """H[i, k] = Pr(a Can of strategy i helps a Need of strategy k)."""
-        n, L = w.shape
-        H = np.zeros((n, n))
-        for i, strategy in enumerate(population.strategies):
-            rc = strategy.partition.classify(np.arange(L))
-            receiver_mass = np.stack(
-                [np.bincount(rc, weights=w[k], minlength=strategy.partition.n_classes) for k in range(n)]
-            )
-            H[i] = receiver_mass @ strategy.donor_help(L) @ w[i]
-        return H
+        _, onehot, help_ = self._cache.get(population.strategies).at(w.shape[1])
+        return np.einsum("kc,icd,id->ik", w @ onehot, help_, w)
 
     def __call__(self, population, w):
         """Expected payoff of each strategy (per interaction, including the role factor)."""
