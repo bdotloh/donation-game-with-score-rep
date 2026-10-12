@@ -85,11 +85,13 @@ def grid(kind, P, tau):
     return html.Div([html.Label("p(help)"), html.Table([header] + rows, className="grid")])
 
 
-def _matrix(values, n):
-    """Current grid entries as an n x n list (None where missing)."""
-    if len(values) != n * n:
+def grid_values(entries, n):
+    """The n x n grid from pattern-matching entries [{"id": {"r", "c"}, "value"}], placed by id
+    (Dash does not keep them in row order), or None if the grid shown is not n x n."""
+    cells = {(e["id"]["r"], e["id"]["c"]): e.get("value") for e in entries}
+    if set(cells) != {(r, c) for r in range(n) for c in range(n)}:
         return None
-    return [values[r * n:(r + 1) * n] for r in range(n)]
+    return [[cells[(r, c)] for c in range(n)] for r in range(n)]
 
 
 def register(app):
@@ -113,10 +115,12 @@ def register(app):
             kind, P, name = "binary", cfg["P"], preset
         else:
             n = 3 if kind == "ternary" else 2
-            current = _matrix(values, n)
+            current = grid_values(ctx.states_list[0], n)
             P = [[validation.parse_number(x) or 0.0 for x in row] for row in current] if current else spec.default_P(kind)
             if trigger == "s-type":
                 preset = None
+                if name in spec.STRATEGY_PRESETS:
+                    name = ""
         tau_value, _ = validation.positive_int(tau, "τ")
         hide, show = {"display": "none"}, {}
         grid_children = grid(kind, P, tau_value or "τ") if kind != "phi" else None
@@ -135,7 +139,8 @@ def register(app):
         Input("s-range", "value"),
     )
     def preview(kind, values, tau, phi, name, max_score):
-        cfg, error = current_strategy(kind, values, tau, phi, name)
+        matrix = grid_values(ctx.inputs_list[1], 3 if kind == "ternary" else 2)
+        cfg, error = current_strategy(kind, matrix, tau, phi, name)
         max_score, _ = validation.positive_int(max_score, "Scores shown")
         if error:
             return no_update, error, None
@@ -157,6 +162,9 @@ def register(app):
             if not add_clicks or current is None or len(selected) >= spec.MAX_STRATEGIES:
                 return no_update
             cfg = dict(current)
+            preset = cfg["name"] if cfg["name"] in spec.STRATEGY_PRESETS else None
+            if preset and (cfg["type"] != "binary" or cfg["P"] != spec.preset_strategy(preset)["P"]):
+                cfg["name"] = ""            # edited after choosing the preset: it is no longer that strategy
             cfg["name"] = unique_name(cfg["name"] or f"Strategy {len(selected) + 1}", [s["name"] for s in selected])
             return selected + [cfg]
         if isinstance(trigger, dict) and trigger.get("type") == "s-remove":
@@ -210,16 +218,20 @@ def register(app):
             return no_update, no_update, no_update, ""
         try:
             experiment = json.loads(base64.b64decode(contents.split(",", 1)[1]))
-        except (ValueError, IndexError):
+        except Exception:  # noqa: BLE001
             return no_update, no_update, no_update, "That file isn't a settings file."
         error = spec.check(experiment)
         if error:
             return no_update, no_update, no_update, error
-        return experiment["strategies"], params_from_experiment(experiment), "/parameters", ""
+        try:
+            params = params_from_experiment(experiment)
+        except Exception as error:  # noqa: BLE001
+            return no_update, no_update, no_update, f"These settings can't be used: {error}"
+        return experiment["strategies"], params, "/parameters", ""
 
 
-def current_strategy(kind, values, tau, phi, name):
-    """Strategy cfg from the editor, or an error message."""
+def current_strategy(kind, matrix, tau, phi, name):
+    """Strategy cfg from the editor (matrix: the p(help) grid as typed), or an error message."""
     name = (name or "").strip()
     if kind == "phi":
         phi_value, error = validation.non_negative(phi, "φ")
@@ -233,7 +245,6 @@ def current_strategy(kind, values, tau, phi, name):
         tau_value, error = validation.positive_int(tau, "τ")
         if error:
             return None, error
-    matrix = _matrix(values, n)
     if matrix is None:
         return None, ""
     P = []
@@ -264,14 +275,25 @@ def small_surface(cfg):
     return fig
 
 
+def merged_scores(entries):
+    """Score entries with the masses of repeated scores added up, sorted by score."""
+    masses = {}
+    for e in entries:
+        score = int(validation.parse_number(e["score"]))
+        masses[score] = masses.get(score, 0.0) + validation.parse_number(e["mass"])
+    return [{"score": score, "mass": mass} for score, mass in sorted(masses.items())]
+
+
 def params_from_experiment(experiment):
     """The parameters page's stored inputs, from a loaded settings file."""
+    fmt = spec.fmt
+    number = validation.parse_number
     return {
-        "shares": [f"{x:g}" for x in experiment["shares"]],
-        "scores": experiment["scores"],
+        "shares": [fmt(number(x)) for x in experiment["shares"]],
+        "scores": merged_scores(experiment["scores"]),
         "norm": experiment["norm"],
-        "noise": {k: f"{v:g}" for k, v in experiment["noise"].items()},
-        "interactions": {"p_can": f"{experiment.get('p_can', 0.5):g}", "benefit": f"{experiment['benefit']:g}",
-                         "cost": f"{experiment['cost']:g}"},
-        "advanced": {k: f"{experiment[k]:g}" for k in ("dt", "n_steps", "max_iter", "tol", "resolution")},
+        "noise": {k: fmt(number(experiment["noise"][k])) for k in ("eps", "eps_up", "eps_down")},
+        "interactions": {"p_can": fmt(number(experiment.get("p_can", 0.5))), "benefit": fmt(number(experiment["benefit"])),
+                         "cost": fmt(number(experiment["cost"]))},
+        "advanced": {k: fmt(number(experiment[k])) for k in ("dt", "n_steps", "max_iter", "tol", "resolution")},
     }

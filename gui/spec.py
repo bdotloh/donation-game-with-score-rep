@@ -41,8 +41,8 @@ NORM_PRESETS = {
 DEFAULT_ADVANCED = {
     "benefit": 2.0,
     "cost": 1.0,
-    "dt": 0.5,
-    "n_steps": 200,
+    "dt": 1.0,
+    "n_steps": 100,
     "max_iter": 1000,
     "tol": 1e-6,
     "resolution": 10,
@@ -103,9 +103,9 @@ def default_norm(kind="binary", tau=2):
 
 
 def w_init(scores):
-    w = np.zeros(max(e["score"] for e in scores) + 1)
+    w = np.zeros(max(int(e["score"]) for e in scores) + 1)
     for e in scores:
-        w[e["score"]] += e["mass"]
+        w[int(e["score"])] += float(e["mass"])
     return w / w.sum()
 
 
@@ -127,14 +127,55 @@ def build(experiment):
     }
 
 
+def fmt(x):
+    """A number as text for an input box, without losing digits."""
+    return f"{x:.15g}"
+
+
 def check(experiment):
     """Error message for an experiment loaded from a file, or "" if it can be run."""
+    from . import validation
+
     try:
+        if not isinstance(experiment, dict):
+            return "That file isn't a settings file."
         if experiment.get("version") != VERSION:
             return "This settings file is from a different version."
-        if not 2 <= len(experiment["strategies"]) <= MAX_STRATEGIES:
+        strategies = experiment["strategies"]
+        if not isinstance(strategies, list) or not 2 <= len(strategies) <= MAX_STRATEGIES:
             return "Choose 2 or 3 strategies."
+        for s in strategies:
+            if not isinstance(s, dict) or not isinstance(s.get("name"), str) or s.get("type") not in ("binary", "ternary", "phi"):
+                return "A strategy in the file is not valid."
+            if s["type"] == "phi" and validation.non_negative(s.get("phi"), "φ")[1]:
+                return "φ must be a number, 0 or more."
+            if s["type"] != "phi" and any(validation.probability(p)[1] for row in s.get("P") or [] for p in row):
+                return "Each p(help) must be a number between 0 and 1."
+        shares, error = validation.shares(experiment["shares"])
+        if error or len(shares) != len(strategies):
+            return error or "There must be one share per strategy."
+        scores = experiment["scores"]
+        if not isinstance(scores, list) or not all(isinstance(e, dict) for e in scores):
+            return "The score distribution is not valid."
+        _, error = validation.score_distribution(scores)
+        if error:
+            return error
+        _, error = validation.noise(*(experiment["noise"].get(k) for k in ("eps", "eps_up", "eps_down")))
+        if error:
+            return error
+        q = validation.parse_number(experiment.get("p_can", 0.5))
+        if q is None or not 0 < q < 1:
+            return "q must lie strictly between 0 and 1."
+        for key in ("benefit", "cost", "tol"):
+            if validation.non_negative(experiment[key], key)[1]:
+                return f"{key} must be a number, 0 or more."
+        dt = validation.parse_number(experiment["dt"])
+        if dt is None or dt <= 0:
+            return "The step size must be positive."
+        for key in ("n_steps", "max_iter", "resolution"):
+            if validation.positive_int(experiment[key], key)[1]:
+                return f"{key} must be a whole number, 1 or more."
         build(experiment)
-    except (KeyError, TypeError, ValueError) as error:
+    except Exception as error:  # noqa: BLE001  (shown to the user)
         return f"These settings can't be used: {error}"
     return ""

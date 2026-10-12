@@ -138,3 +138,78 @@ def test_click_composition():
     assert click_composition({"points": [{"customdata": {"1": 0.8, "0": 0.2}}]}) == [0.2, 0.8]
     assert click_composition({"points": [{}]}) is None
     assert click_composition({"points": [{"customdata": ["a"]}]}) is None
+
+
+# ---------------------------------------------------------------- cases from the review
+
+
+def test_grid_values_are_placed_by_id():
+    from gui.pages.strategies import grid_values
+
+    # Dash may send pattern-matching values out of row order.
+    order = [(0, 0), (0, 1), (1, 0), (1, 1), (0, 2), (1, 2), (2, 0), (2, 1), (2, 2)]
+    entries = [{"id": {"type": "s-p", "r": r, "c": c}, "value": f"{3 * r + c}"} for r, c in order]
+    assert grid_values(entries, 3) == [["0", "1", "2"], ["3", "4", "5"], ["6", "7", "8"]]
+    assert grid_values(entries[:4], 3) is None
+    assert grid_values(entries[:4], 2) == [["0", "1"], ["3", "4"]]
+
+
+@pytest.mark.parametrize("value", ["inf", "-inf", "nan", "1e400", float("nan"), float("inf"), True])
+def test_non_finite_numbers_are_rejected(value):
+    assert validation.parse_number(value) is None
+    assert validation.positive_int(value, "Steps")[1]
+    assert validation.non_negative(value, "The benefit")[1]
+    assert validation.score_entry(value, "0.5")[1]
+    assert validation.score_entry("1", value)[1]
+
+
+def test_initial_scores_are_capped():
+    assert validation.score_entry(validation.MAX_INITIAL_SCORE + 1, "1")[1]
+    assert validation.score_distribution([{"score": -1, "mass": 1.0}])[1]
+    assert validation.score_distribution([{"score": 0, "mass": 0.5}, {"score": -1, "mass": 0.2},
+                                          {"score": 3, "mass": 0.3}])[1]
+    assert validation.score_distribution([{"score": 10 ** 12, "mass": 1.0}])[1]
+
+
+@pytest.mark.parametrize("change", [
+    lambda e: [e],                                      # a list, e.g. rest_points.json
+    lambda e: {k: v for k, v in e.items() if k != "n_steps"},
+    lambda e: {k: v for k, v in e.items() if k != "resolution"},
+    lambda e: {**e, "n_steps": "abc"},
+    lambda e: {**e, "scores": [{"score": -1, "mass": 1.0}]},
+    lambda e: {**e, "scores": [{"score": 10 ** 12, "mass": 1.0}]},
+    lambda e: {**e, "benefit": float("nan")},
+    lambda e: {**e, "strategies": e["strategies"][:1]},
+    lambda e: {**e, "shares": [0.5, 0.5]},
+    lambda e: {**e, "norm": {"type": "ternary", "tau": 2, "CN": "00000000", "NC": "00000000"}},
+])
+def test_bad_settings_files_are_rejected(change):
+    experiment, error = _experiment()
+    assert error == ""
+    assert spec.check(change(experiment))
+
+
+def test_settings_round_trip_keeps_digits():
+    from gui.pages.strategies import params_from_experiment
+
+    experiment, _ = _experiment()
+    experiment["n_steps"] = 1234567
+    experiment["tol"] = 1e-7
+    params = params_from_experiment(experiment)
+    assert params["advanced"]["n_steps"] == "1234567"
+    assert validation.parse_number(params["advanced"]["tol"]) == 1e-7
+
+
+def test_unusable_stored_norm_falls_back():
+    from gui.pages.parameters import usable_norm
+
+    fallback = {"type": "binary", "tau": None, "CN": "0" * 8, "NC": "0" * 8}
+    assert usable_norm({"type": "ternary", "tau": 2, "CN": "0" * 8, "NC": "0" * 8}, fallback) is fallback
+    assert usable_norm({"type": "ternary", "tau": None, "CN": "0" * 18, "NC": "0" * 18}, fallback)["tau"] == 2
+
+
+def test_repeated_scores_are_merged_on_load():
+    from gui.pages.strategies import merged_scores
+
+    assert merged_scores([{"score": 1, "mass": 0.25}, {"score": 0, "mass": 0.5}, {"score": 1.0, "mass": 0.25}]) == [
+        {"score": 0, "mass": 0.5}, {"score": 1, "mass": 0.5}]

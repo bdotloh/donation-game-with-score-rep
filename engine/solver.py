@@ -23,9 +23,10 @@ class StableScores:
     w_prev: np.ndarray      # distributions that the last rates were computed from
     rates: object           # Rates computed from w_prev (None if no step was taken)
     n_iter: int
-    converged: bool         # change fell to the tolerance
+    converged: bool         # change fell to the tolerance, and no chain is drifting
     transient: bool         # every chain left its initial scores (chain is transient)
     history: list = field(default_factory=list)
+    drifting: np.ndarray = None  # (n,) up-rate >= down-rate at the top score: scores keep spreading upwards
 
     @property
     def w0(self):
@@ -83,7 +84,16 @@ class StableScoreSolver:
             converged = np.abs(dw).max() <= self.tol
             if (transient or converged) and not self.force_max_iter:
                 break
+        drifting = np.zeros(population.n, dtype=bool)
+        if rates is not None:
+            # Above the highest class cutoff the rates no longer change with the score, so if the
+            # up-rate at the top is at least the down-rate there is no stable distribution: the
+            # change per step only shrinks slowly, and a small change does not mean convergence.
+            up, down = rates.g[:, -1], rates.f[:, -1]
+            drifting = (up > 0) & (up >= down * (1 - 1e-9))   # equal up to round-off counts as drifting
+            converged = converged and not drifting.any()
         return StableScores(
+            drifting=drifting,
             w=w,
             w_prev=w_prev,
             rates=rates,

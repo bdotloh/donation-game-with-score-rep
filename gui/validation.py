@@ -6,24 +6,30 @@ import numpy as np
 # Shares and masses may be typed as fractions (0.3333) or percentages (33.33).
 FRACTION_TOL = 1e-3
 PERCENT_TOL = 0.1
+MAX_INITIAL_SCORE = 1000
 
 
 def parse_number(value):
     """float from a number or a string (accepts "33.33", "1/3", "33.33%"); None if it isn't one."""
     if value is None:
         return None
+    if isinstance(value, bool):
+        return None
     if isinstance(value, (int, float)):
-        return float(value) if np.isfinite(value) else None
-    text = str(value).strip().rstrip("%").strip()
-    if not text:
-        return None
-    try:
-        if "/" in text:
-            num, den = text.split("/", 1)
-            return float(num) / float(den)
-        return float(text)
-    except (ValueError, ZeroDivisionError):
-        return None
+        number = float(value)
+    else:
+        text = str(value).strip().rstrip("%").strip()
+        if not text:
+            return None
+        try:
+            if "/" in text:
+                num, den = text.split("/", 1)
+                number = float(num) / float(den)
+            else:
+                number = float(text)
+        except (ValueError, ZeroDivisionError, OverflowError):
+            return None
+    return number if np.isfinite(number) else None
 
 
 def normalise(values, what):
@@ -48,12 +54,17 @@ def score_distribution(entries):
     """entries: list of {"score": int, "mass": number}. Returns w_init (index = score)."""
     if not entries:
         return None, "Add at least one score."
+    for e in entries:
+        _, error = score_entry(e.get("score"), e.get("mass"))
+        if error:
+            return None, error
     masses, error = normalise([e["mass"] for e in entries], "mass")
     if error:
         return None, error
-    w = np.zeros(max(e["score"] for e in entries) + 1)
-    for e, m in zip(entries, masses):
-        w[e["score"]] += m
+    scores = [int(parse_number(e["score"])) for e in entries]
+    w = np.zeros(max(scores) + 1)
+    for j, m in zip(scores, masses):
+        w[j] += m
     return w, ""
 
 
@@ -62,6 +73,8 @@ def score_entry(score, mass):
     s, m = parse_number(score), parse_number(mass)
     if s is None or s < 0 or s != int(s):
         return None, "The score must be a whole number, 0 or more."
+    if s > MAX_INITIAL_SCORE:
+        return None, f"The score must be at most {MAX_INITIAL_SCORE}."
     if m is None or m < 0:
         return None, "The mass must be a number, 0 or more."
     return {"score": int(s), "mass": m}, ""

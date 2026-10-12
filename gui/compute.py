@@ -45,7 +45,9 @@ class Run:
             self.message = "Finding rest points…"
             velocities = [r.velocity for r in self.grid_results]
             self.rest_points = find_rest_points(self.field.velocity, self.n, grid=self.grid,
-                                                grid_velocities=velocities)
+                                                grid_velocities=velocities,
+                                                grid_converged=[r.converged for r in self.grid_results],
+                                                neutral_tol=10 * self.experiment["tol"])
             self.progress = 0.65
             self.message = "Evolving the replicator equation…"
             n_steps = self.experiment["n_steps"]

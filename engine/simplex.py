@@ -11,14 +11,15 @@ most common strategy at rho*; then dz_k / dt = v_k. Its columns are finite
 differences along e_k - e_r, taken so that every point evaluated stays in the
 simplex:
 
-- Off the face of rho* (rho*_k = 0), a forward step BOUNDARY_STEP. As
+- Off the face of rho* (rho*_k = 0), forward steps BOUNDARY_STEP and half of it,
+  extrapolated to step 0. As
   v_k = rho_k (pi_k - pi_bar), the difference v_k(rho* + h (e_k - e_r)) / h is
   the invasion fitness pi_k - pi_bar of k at rho_k = h: the step only cancels the
   factor rho_k, so the payoffs' numerical error is not amplified and the step
   can be small (the error is h times the slope of the payoffs). At a vertex e_i
   these are the invasion fitnesses (1 - h)(pi_k - pi_i).
 - Within the face (along an edge, or in the interior), central differences
-  with FD_STEP, or a forward step of FD_STEP close to the boundary. Here the
+  with FD_STEP, or with half the distance to the boundary when that is closer. Here the
   payoffs' error is divided by the step. With the solver's default tol = 1e-5
   that error is up to ~1e-6 from one point to the next (it jumps when the number
   of chain steps changes; the smooth part of the bias does not matter), so the
@@ -43,9 +44,12 @@ from scipy.optimize import brentq
 from .population import Population
 
 FD_STEP = 1e-2          # finite-difference step within the face of a point
-BOUNDARY_STEP = 1e-4    # forward step off the face (invasion fitnesses)
-MERGE_TOL = 1e-3        # rest points closer than this (in every coordinate) are merged
+BOUNDARY_STEP = 1e-6    # forward step off the face (invasion fitnesses)
+INSIDE_STEP = 1e-3      # boundary grid points are moved this far inside to read their payoff differences
+MERGE_TOL = 1e-3        # rest points of the same kind of location closer than this are merged
 REST_TOL = 1e-3         # a rest point's payoffs agree to REST_TOL times their largest spread on the grid
+ZERO_TOL = 1e-9         # payoff differences below ZERO_TOL times the largest spread count as zero
+SINGULAR_TOL = 1e-6     # interior points whose Jacobian has |det| below this times |J|^2 lie on curves
 MAX_NEWTON = 30
 
 
@@ -166,23 +170,26 @@ class RestPoint:
     converged: bool
 
 
-def find_rest_points(velocity_fn, n, resolution=20, grid=None, grid_velocities=None, xtol=1e-6, neutral_tol=1e-7):
+def find_rest_points(velocity_fn, n, resolution=20, grid=None, grid_velocities=None, xtol=1e-6, neutral_tol=1e-7,
+                     grid_converged=None):
     """Rest points of the replicator velocity field velocity_fn(rho) -> (velocity, converged), n = 2 or 3.
 
-    grid, grid_velocities: a simplex_grid (any resolution, any order) and the
-    velocities on it, if already computed; otherwise simplex_grid(n, resolution)
-    is evaluated. Vertices are always included. Rest points on the edges are
+    grid, grid_velocities (and grid_converged): a simplex_grid (any resolution, any order)
+    and the velocities (and converged flags) on it, if already computed; otherwise
+    simplex_grid(n, resolution) is evaluated. Vertices are always included. Rest points on the edges are
     sign changes of pi_b - pi_a = v_b / (rho_a rho_b) between grid points (and
     points BOUNDARY_STEP from the vertices), refined by brentq to xtol. Interior
     rest points (n = 3) start from grid cells where pi_1 - pi_3 and pi_2 - pi_3
     both change sign, and are refined by Newton's method; one closer to the
     boundary than about a grid cell can be missed. A refined point is kept if the
     payoffs of the strategies present agree to REST_TOL times their largest
-    spread on the grid. Lines of rest points (strategies with equal payoffs
-    everywhere) are not reported.
+    spread on the grid. Points of segments or curves of rest points (strategies with equal
+    payoffs along a whole line) are not reported, except where a curve meets an edge.
 
-    kind: every Re(eigenvalue) < -neutral_tol is 'stable', every one > neutral_tol
-    'unstable', some of each 'saddle', anything else 'neutral'. converged is
+    kind: every Re(eigenvalue) < -tol is 'stable', every one > tol 'unstable', some of
+    each 'saddle', anything else 'neutral', where tol is neutral_tol or twice the estimated
+    error of the eigenvalues, whichever is larger. Pass a neutral_tol of the order of the
+    payoffs' numerical error (e.g. ten times the score solver's tolerance) for engine fields. converged is
     whether the score chains converged at the point and at the points used for
     its eigenvalues.
     """
@@ -197,16 +204,18 @@ def find_rest_points(velocity_fn, n, resolution=20, grid=None, grid_velocities=N
         velocities = np.asarray(grid_velocities, dtype=float)
         if velocities.shape != grid.shape:
             raise ValueError(f"grid_velocities must have shape {grid.shape}; got {velocities.shape}.")
-        for rho, v in zip(grid, velocities):
-            field.store(rho, v)
+        flags = [None] * len(grid) if grid_converged is None else [bool(c) for c in grid_converged]
+        for rho, v, c in zip(grid, velocities, flags):
+            field.store(rho, v, c)
     on_grid = {tuple(c): (rho, v) for c, rho, v in zip(np.rint(grid * resolution).astype(int), grid, velocities)}
     spread = max(_payoff_spread(rho, v) for rho, v in zip(grid, velocities))
     rest_tol = REST_TOL * spread + 1e-12
 
+    zero_tol = ZERO_TOL * spread + 1e-15
     candidates = [(np.eye(n)[i], "vertex") for i in range(n)]
     for a, b in combinations(range(n), 2):
         location = "interior" if n == 2 else "edge"
-        candidates += [(rho, location) for rho in _edge_roots(field, n, a, b, resolution, on_grid, xtol)]
+        candidates += [(rho, location) for rho in _edge_roots(field, n, a, b, resolution, on_grid, xtol, zero_tol)]
     if n == 3:
         found = []
         for rho in _interior_roots(field, resolution, on_grid, xtol, rest_tol, avoid=found):
@@ -215,13 +224,18 @@ def find_rest_points(velocity_fn, n, resolution=20, grid=None, grid_velocities=N
 
     points = []
     for rho, location in candidates:
-        if any(np.abs(rho - p.rho).max() <= MERGE_TOL for p in points):
+        # Never merge into a vertex (an edge point can sit very close to one); merge the rest.
+        if any((location == "vertex") == (p.location == "vertex") and np.abs(rho - p.rho).max() <= MERGE_TOL
+               for p in points):
             continue
         v, converged = field.evaluate(rho)
         if location != "vertex" and _payoff_spread(rho, v) > rest_tol:
             continue
-        eigenvalues, fd_converged = field.eigenvalues(rho, v)
-        kind = _classify(eigenvalues, neutral_tol)
+        eigenvalues, error, fd_converged, n_face = field.eigenvalues(rho, v)
+        tol = max(neutral_tol, 2 * error)
+        if location != "vertex" and np.any(np.abs(eigenvalues[:n_face]) <= tol):
+            continue                    # on a curve or segment of rest points within its face
+        kind = _classify(eigenvalues, tol)
         points.append(RestPoint(rho, kind, eigenvalues, location, converged and fd_converged))
     return points
 
@@ -237,8 +251,8 @@ class _CachedField:
     def _key(rho):
         return tuple(np.round(rho, 14))
 
-    def store(self, rho, v):
-        self.cache.setdefault(self._key(rho), (np.asarray(v, dtype=float), None))
+    def store(self, rho, v, converged=None):
+        self.cache.setdefault(self._key(rho), (np.asarray(v, dtype=float), converged))
 
     def velocity(self, rho):
         hit = self.cache.get(self._key(rho))
@@ -254,12 +268,29 @@ class _CachedField:
         return hit
 
     def eigenvalues(self, rho, v0):
-        """Eigenvalues of the restricted Jacobian at rho (see the module docstring), and
-        whether the score chains converged at every point used."""
+        """Eigenvalues of the restricted Jacobian at rho (see the module docstring; the first
+        n_face are within the face of rho), an estimate of their error (from repeating the
+        differences with half the step), whether the score chains converged at every point used,
+        and n_face."""
         n = len(rho)
         r = int(np.argmax(rho))
         face = [k for k in range(n) if k != r and rho[k] > 0]
         off = [k for k in range(n) if k != r and rho[k] == 0]
+        J, converged = self._jacobian(rho, v0, r, face, off, 1.0)
+        J_half, c = self._jacobian(rho, v0, r, face, off, 0.5)
+        converged = converged and c
+        # Off the face the forward difference is biased by (step x slope); halving the step and
+        # extrapolating removes that bias. Within the face keep the full step (less noise).
+        transverse = slice(len(face), None)
+        J_best = J.copy()
+        J_best[:, transverse] = 2 * J_half[:, transverse] - J[:, transverse]
+        eigenvalues = _block_eigenvalues(J_best, len(face))
+        error = float(np.abs(np.sort_complex(_block_eigenvalues(J, len(face)).astype(complex))
+                             - np.sort_complex(_block_eigenvalues(J_half, len(face)).astype(complex))).max())
+        return eigenvalues, error, converged, len(face)
+
+    def _jacobian(self, rho, v0, r, face, off, scale):
+        n = len(rho)
         order = face + off
         J = np.empty((n - 1, n - 1))
         converged = True
@@ -267,11 +298,10 @@ class _CachedField:
             d = np.zeros(n)
             d[k], d[r] = 1.0, -1.0
             if rho[k] == 0:
-                steps = (BOUNDARY_STEP, 0.0)
-            elif rho[k] >= FD_STEP:
-                steps = (FD_STEP, -FD_STEP)
+                steps = (scale * BOUNDARY_STEP, 0.0)
             else:
-                steps = (FD_STEP, 0.0)      # rho[r] >= 1/n > FD_STEP, so +FD_STEP stays inside
+                h = scale * min(FD_STEP, rho[k] / 2)   # rho[r] >= 1/n > FD_STEP, so +h stays inside
+                steps = (h, -h)
             vs = []
             for h in steps:
                 if h == 0.0:
@@ -281,7 +311,7 @@ class _CachedField:
                 vs.append(v)
                 converged = converged and c
             J[:, col] = ((vs[0] - vs[1]) / (steps[0] - steps[1]))[order]
-        return _block_eigenvalues(J, len(face)), converged
+        return J, converged
 
 
 def _on_simplex(rho):
@@ -346,8 +376,9 @@ def _edge_point(n, a, b, t):
     return rho
 
 
-def _edge_roots(field, n, a, b, resolution, on_grid, xtol):
-    """Points on the edge from e_a to e_b where pi_a = pi_b."""
+def _edge_roots(field, n, a, b, resolution, on_grid, xtol, zero_tol):
+    """Points on the edge from e_a to e_b where pi_a = pi_b. Differences within zero_tol of 0
+    count as 0; a run of several zeros (a segment of rest points) is not reported."""
 
     def payoff_difference(t):
         return field.velocity(_edge_point(n, a, b, t))[b] / (t * (1.0 - t))
@@ -363,17 +394,28 @@ def _edge_roots(field, n, a, b, resolution, on_grid, xtol):
     ts.append(1.0 - BOUNDARY_STEP)
     values.append(payoff_difference(1.0 - BOUNDARY_STEP))
 
+    signs = [0 if abs(f) <= zero_tol else (1 if f > 0 else -1) for f in values]
     roots = []
-    for t0, t1, f0, f1 in zip(ts, ts[1:], values, values[1:]):
-        if f0 == 0.0 and f1 == 0.0:
-            continue                    # equal payoffs all along: not isolated rest points
-        if f0 == 0.0 or f1 == 0.0:
-            roots.append(t0 if f0 == 0.0 else t1)
-        elif (f0 < 0) != (f1 < 0):
-            try:
-                roots.append(brentq(payoff_difference, t0, t1, xtol=xtol))
-            except ValueError:          # grid velocities that disagree with velocity_fn
-                pass
+    k = 0
+    while k < len(ts) - 1:
+        if signs[k] != 0 and signs[k + 1] != 0:
+            if signs[k] != signs[k + 1]:
+                try:
+                    roots.append(brentq(payoff_difference, ts[k], ts[k + 1], xtol=xtol))
+                except ValueError:      # grid velocities that disagree with velocity_fn
+                    pass
+            k += 1
+            continue
+        if signs[k] == 0:
+            k += 1
+            continue
+        # A run of zeros starts at k + 1: keep it only if it is a single point between opposite signs.
+        end = k + 1
+        while end < len(ts) and signs[end] == 0:
+            end += 1
+        if end < len(ts) and end == k + 2 and signs[end] == -signs[k]:
+            roots.append(ts[k + 1])
+        k = end
     return [_edge_point(n, a, b, t) for t in roots]
 
 
@@ -387,9 +429,14 @@ def _interior_roots(field, resolution, on_grid, xtol, rest_tol, avoid):
     """Interior rest points for n = 3, from the grid cells where both pi_1 - pi_3 and
     pi_2 - pi_3 change sign. Cells holding a point of `avoid` are skipped."""
     values = {}
+    centre = np.full(3, 1 / 3)
     for counts, (rho, v) in on_grid.items():
         if min(counts) > 0:
             values[counts[:2]] = (rho, _relative_payoffs(rho, v))
+        else:
+            # Payoff differences on the boundary, read just inside it.
+            inside = (1 - INSIDE_STEP) * rho + INSIDE_STEP * centre
+            values[counts[:2]] = (rho, _relative_payoffs(inside, field.velocity(inside)))
     for a in range(resolution):
         for b in range(resolution - a):
             for cell in (((a, b), (a + 1, b), (a, b + 1)), ((a + 1, b), (a, b + 1), (a + 1, b + 1))):
@@ -403,7 +450,8 @@ def _interior_roots(field, resolution, on_grid, xtol, rest_tol, avoid):
                     continue
                 if any(_in_triangle(P, rho) for rho in avoid):
                     continue
-                rho = _newton(field, _linear_zero(P, G), xtol, rest_tol)
+                start = (1 - INSIDE_STEP) * _linear_zero(P, G) + INSIDE_STEP * centre
+                rho = _newton(field, start, xtol, rest_tol)
                 if rho is not None:
                     yield rho
 
@@ -434,16 +482,20 @@ def _newton(field, rho, xtol, rest_tol):
     def residual(rho):
         return _relative_payoffs(rho, field.velocity(rho))
 
-    F = residual(rho)
-    for _ in range(MAX_NEWTON):
-        if np.abs(F).max() <= 1e-15:
-            break
+    def jacobian(rho, F):
         J = np.empty((2, 2))
         for j in range(2):
             d = np.zeros(3)
             d[j], d[2] = 1.0, -1.0
             h = FD_STEP if rho[2] > FD_STEP else -min(FD_STEP, rho[j] / 2)
             J[:, j] = (residual(rho + h * d) - F) / h
+        return J
+
+    F = residual(rho)
+    for _ in range(MAX_NEWTON):
+        if np.abs(F).max() <= 1e-15:
+            break
+        J = jacobian(rho, F)
         try:
             step = np.linalg.solve(J, -F)
         except np.linalg.LinAlgError:
@@ -462,4 +514,9 @@ def _newton(field, rho, xtol, rest_tol):
         rho, F = trial, F_trial
         if np.abs(scale * step).max() <= xtol:
             break
-    return rho if np.abs(F).max() <= rest_tol else None
+    if np.abs(F).max() > rest_tol:
+        return None
+    J = jacobian(rho, F)
+    if abs(np.linalg.det(J)) <= SINGULAR_TOL * (J ** 2).sum():
+        return None                     # on a curve of rest points, not an isolated one
+    return rho

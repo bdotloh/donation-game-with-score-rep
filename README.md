@@ -54,7 +54,15 @@ Payoffs(benefit=2, cost=1)(population, result.w)
 ```
 
 The chains run until the largest change in a step is at most `tol` (default
-1e-5), or `max_iter` steps. The score range grows as needed.
+1e-5), or `max_iter` steps. The score range grows as needed. `result.converged`
+is False if the chains hit `max_iter`, or if some strategy's up-rate at the top
+score is at least its down-rate (`result.drifting`): its scores then keep
+spreading upwards and there is no stable distribution, however small the change
+per step has become.
+
+`StableScoreSolver(..., role_factor=q * (1 - q))` and `Payoffs(role_factor=...)`
+set the probability of a given ordered (donor, receiver) pair when each
+individual can help with probability q (1/4 for q = 1/2, as in `helper_funcs.jl`).
 
 `ESSFinder` finds the ESS among a set of strategies, as `find_ESS` in
 `helper_funcs.jl` does.
@@ -72,7 +80,11 @@ trajectory.scores_converged  # False where the score chains hit max_iter
 
 Each step restarts the score chains from `w_init`, runs them until they
 converge or reach `max_iter`, computes the payoff matrix from the resulting
-help probabilities and takes an Euler step of d ρ_i/dt = ρ_i (π_i − π̄). Where
+help probabilities and takes an Euler step of d ρ_i/dt = ρ_i (π_i − π̄).
+`ReplicatorField(dynamics, strategies, w_init)` evaluates all of this at any
+composition (`evaluate_many` in parallel over `simplex_grid(n, resolution)`), and
+`find_rest_points(field.velocity, n)` finds the rest points and classifies them
+from the eigenvalues of the Jacobian on the simplex. Where
 the chains don't converge (scores drifting upwards for ever, or money spreading
 out), payoffs come from the distribution after `max_iter` steps, so they
 depend on `w_init` and `max_iter`. `warm_start=True` continues the chains from
@@ -92,10 +104,13 @@ python -m gui            # then open http://127.0.0.1:8050
    times), initial score distribution, scoring norm (binary or ternary, one
    dropdown per case, or paste a barcode), noise ε, ε↑, ε↓ (ε↑ + ε↓ = 1), the
    probability q of being able to help, benefit and cost. Settings can be saved
-   and loaded as JSON.
+   and loaded as JSON. The default noise has ε↑ < ε↓ so that scores settle; with
+   ε↑ = ε↓ (helper_funcs.jl's NOISE_VAL) many populations have no stable score
+   distribution.
 3. **Results**: the simplex (a line for 2 strategies, a triangle for 3) with
    arrows coloured and sized by speed, rest points (black stable, white
-   unstable, gray saddle) and the trajectory from the initial shares. Click the
+   unstable, gray saddle) and the trajectory from the initial shares. Lighter
+   arrows mark points where the score chains didn't converge. Click the
    simplex or type shares to see the score distributions, payoffs and helping
    rates there; press Play to step through the trajectory. Figures download as
    PNG or SVG from each plot's toolbar; "Download data" gives the trajectory,

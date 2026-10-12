@@ -103,9 +103,9 @@ def test_precomputed_grid_is_reused():
         calls.append(rho)
         return game(rho)
 
-    points = find_rest_points(counting, 2, grid=grid, grid_velocities=velocities)
+    points = find_rest_points(counting, 2, grid=grid, grid_velocities=velocities, grid_converged=[True] * len(grid))
     assert find(points, [0.5, 0.5]).kind == "stable"
-    assert len(calls) < len(grid)
+    assert not any(np.allclose(c, g) for c in calls for g in grid[1:-1])   # interior grid points not re-evaluated
 
 
 # ---------------------------------------------------------------- with the engine
@@ -157,3 +157,46 @@ def test_engine_rest_points_match_invasion_fitness():
         pi = field.evaluate(np.eye(2)[i]).payoffs
         invasion = pi[1 - i] - pi[i]
         assert np.sign(np.real(vertex.eigenvalues[0])) == np.sign(invasion)
+
+
+# ---------------------------------------------------------------- cases from the review
+
+
+def test_interior_rest_point_near_an_edge_is_found():
+    """A stable interior point with one share below one grid cell (resolution 10)."""
+    x = np.array([0.628, 0.078, 0.294])
+    # A x = c 1 with negative-definite symmetric part on the tangent space: stable.
+    B = -np.eye(3)
+    A = B - (B @ x)[:, None] + 1.0
+    points = find_rest_points(LinearGame(A), 3, resolution=10)
+    interior = [p for p in points if p.location == "interior"]
+    assert len(interior) == 1
+    np.testing.assert_allclose(interior[0].rho, x, atol=1e-5)
+    assert interior[0].kind == "stable"
+
+
+def test_segments_of_rest_points_are_not_reported():
+    assert len(find_rest_points(LinearGame(0.3 * np.ones((2, 2))), 2, resolution=10)) == 2   # vertices only
+    points = find_rest_points(LinearGame([[1, 1, 0], [1, 1, 0], [0, 0, 2]]), 3, resolution=8)
+    assert not [p for p in points if p.location == "edge" and p.rho[2] == 0]   # pi_1 = pi_2 on that edge
+
+
+def test_zero_eigenvalue_is_neutral():
+    points = find_rest_points(LinearGame([[0, 0], [0, 1]]), 2, resolution=10)
+    assert find(points, [1, 0]).kind == "neutral"
+
+
+def test_edge_point_next_to_a_vertex_is_kept():
+    eps = 5e-4                                   # unstable rest point at rho_2 = eps / (1 + eps) next to e_1
+    points = find_rest_points(LinearGame([[eps, eps], [0, 1]]), 2, resolution=10)
+    assert len(points) == 3
+    assert find(points, [1, 0]).kind == "stable" and find(points, [0, 1]).kind == "stable"
+
+
+def test_eigenvalue_near_the_boundary():
+    """Coordination game with its rest point at rho_2 = 0.005: eigenvalue rho_1 rho_2 (a + b)."""
+    a, b = 0.005, 0.995
+    points = find_rest_points(LinearGame([[a, 0], [0, b]]), 2, resolution=10)
+    point = [p for p in points if p.location == "interior"][0]
+    np.testing.assert_allclose(point.rho, [b, a], atol=1e-6)
+    np.testing.assert_allclose(point.eigenvalues, [a * b * (a + b)], rtol=0.05)

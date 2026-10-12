@@ -222,3 +222,43 @@ def test_probability_is_conserved():
     for w, _ in result.history:
         np.testing.assert_allclose(w.sum(axis=1), 1.0, atol=1e-13)
         assert np.all(w >= 0)
+
+
+def test_drifting_chains_are_not_converged():
+    """Money with eps_up = eps_down: Discriminators' scores spread out for ever (null recurrent)."""
+    money = ScoringNorm.from_barcode("CN:00000-++ NC:00000+--")
+    result = StableScoreSolver(money, Noise.from_noise_val(0.1), max_iter=20_000)(Population([Discriminators()]),
+                                                                                  [0.5, 0.5])
+    assert result.drifting.all() and not result.converged
+    settled = StableScoreSolver(money, Noise(0.1, 0.2, 0.4), tol=1e-9, max_iter=20_000)(
+        Population([Discriminators()]), [0.5, 0.5])
+    assert settled.converged and not settled.drifting.any()
+    np.testing.assert_allclose(settled.w0, [1 - 0.2 / 0.4], atol=1e-4)   # w0 = 1 - eps_up/eps_down for money
+
+
+def test_concurrent_rate_evaluations():
+    """Rates and payoffs can be computed from several threads sharing one solver."""
+    import threading
+
+    norm = ScoringNorm.from_barcode("CN:00000-0+ NC:00000+-0")
+    solver = StableScoreSolver(norm, Noise(0.1, 0.3, 0.7))
+    errors = []
+
+    def work(seed):
+        rng = np.random.default_rng(seed)
+        for _ in range(40):
+            population = Population([PhiDisc(rng.uniform(0, 2)), Discriminators()], [0.5, 0.5])
+            w = rng.random((2, int(rng.integers(60, 300))))
+            w /= w.sum(axis=1, keepdims=True)
+            try:
+                solver.rates(population, w)
+                Payoffs().help_probabilities(population, w)
+            except Exception as error:  # noqa: BLE001
+                errors.append(error)
+
+    threads = [threading.Thread(target=work, args=(k,)) for k in range(4)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+    assert not errors

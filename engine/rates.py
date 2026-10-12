@@ -16,6 +16,7 @@ norm's classes and every strategy's receiver classes, so it is a few array
 operations per step whatever the strategies are.
 """
 
+import threading
 from dataclasses import dataclass
 
 import numpy as np
@@ -55,20 +56,24 @@ class ClassStructure:
                          | {x for p in partitions for x in p.cutoffs})
         self.partition = ScorePartition(cutoffs)
         self.lows = np.array([0] + cutoffs)
-        self.capacity = 0
-        self._grow(64)
+        self._arrays = self._build(64)
 
-    def _grow(self, n_scores):
-        self.capacity = n_scores
-        scores = np.arange(n_scores)
-        self._classes = self.partition.classify(scores)
-        self._onehot = np.eye(self.partition.n_classes)[self._classes]
-        self._help = np.stack([s.donor_help(n_scores)[s.partition.classify(self.lows)] for s in self.strategies])
+    @property
+    def capacity(self):
+        return self._arrays[0]
+
+    def _build(self, n_scores):
+        classes = self.partition.classify(np.arange(n_scores))
+        onehot = np.eye(self.partition.n_classes)[classes]
+        help_ = np.stack([s.donor_help(n_scores)[s.partition.classify(self.lows)] for s in self.strategies])
+        return n_scores, classes, onehot, help_
 
     def at(self, n_scores):
-        if n_scores > self.capacity:
-            self._grow(max(n_scores, 2 * self.capacity))
-        return self._classes[:n_scores], self._onehot[:n_scores], self._help[:, :, :n_scores]
+        arrays = self._arrays               # read once: another thread may replace it
+        if n_scores > arrays[0]:
+            arrays = self._arrays = self._build(max(n_scores, 2 * arrays[0]))
+        _, classes, onehot, help_ = arrays
+        return classes[:n_scores], onehot[:n_scores], help_[:, :, :n_scores]
 
 
 class _Cache:
@@ -78,17 +83,22 @@ class _Cache:
         self.partitions = partitions
         self.size = size
         self._items = {}
+        self._lock = threading.Lock()
 
     def __getstate__(self):
-        return {"partitions": self.partitions, "size": self.size, "_items": {}}
+        return {"partitions": self.partitions, "size": self.size}
+
+    def __setstate__(self, state):
+        self.__init__(state["partitions"], state["size"])
 
     def get(self, strategies):
         key = tuple(id(s) for s in strategies)
-        structure = self._items.get(key)
-        if structure is None or any(a is not b for a, b in zip(structure.strategies, strategies)):
-            if len(self._items) >= self.size:
-                self._items.pop(next(iter(self._items)))
-            structure = self._items[key] = ClassStructure(strategies, self.partitions)
+        with self._lock:
+            structure = self._items.get(key)
+            if structure is None or any(a is not b for a, b in zip(structure.strategies, strategies)):
+                if len(self._items) >= self.size:
+                    self._items.pop(next(iter(self._items)))
+                structure = self._items[key] = ClassStructure(strategies, self.partitions)
         return structure
 
 
@@ -99,9 +109,13 @@ class TransitionRates:
         self.role_factor = role_factor
         self._cache = _Cache((norm.partition,))
         self._rules = {}
+        self._lock = threading.Lock()
 
     def __getstate__(self):
-        return {**self.__dict__, "_rules": {}}
+        return {k: v for k, v in self.__dict__.items() if k not in ("_rules", "_lock")}
+
+    def __setstate__(self, state):
+        self.__dict__.update(state, _rules={}, _lock=threading.Lock())
 
     def __call__(self, population, w):
         n, L = w.shape
@@ -124,6 +138,7 @@ class TransitionRates:
         receiver = decline_nc @ (w_bar @ norm_onehot) + (helped[classes][None] * change_nc).sum(axis=2)
 
         rates = self.role_factor * (donor + receiver[:, None, :])          # [up/down, i, j]
+        np.maximum(rates, 0.0, out=rates)                                   # round-off where terms cancel
         G = np.zeros((n, L + 1))
         G[:, 1:] = rates[0]
         F = rates[1]
@@ -139,7 +154,8 @@ class TransitionRates:
     def _rule_arrays(self, structure, L):
         """Indicators of dS = +1 (index 0) and -1 (index 1) from the norm, per (refined class, score)."""
         key = id(structure)
-        cached = self._rules.get(key)
+        with self._lock:
+            cached = self._rules.get(key)
         if cached is None or cached[0] is not structure or cached[1] < L:
             capacity = max(L, structure.capacity)
             nc = self.norm.partition.classify(np.arange(capacity))           # norm class of each score
@@ -154,8 +170,9 @@ class TransitionRates:
             decline_nc = (NC[:, 0, :][None] == signs)[:, nc, :]
             cached = (structure, capacity, decline_cn * 1.0, (give_cn * 1.0 - decline_cn),
                       decline_nc * 1.0, (give_nc * 1.0 - decline_nc), np.eye(self.norm.partition.n_classes)[nc])
-            if len(self._rules) >= 16:
-                self._rules.pop(next(iter(self._rules)))
-            self._rules[key] = cached
+            with self._lock:
+                if len(self._rules) >= 16:
+                    self._rules.pop(next(iter(self._rules)))
+                self._rules[key] = cached
         _, _, decline_cn, change_cn, decline_nc, change_nc, norm_onehot = cached
         return (decline_cn[:, :, :L], change_cn[:, :, :L], decline_nc[:, :L], change_nc[:, :L], norm_onehot[:L])

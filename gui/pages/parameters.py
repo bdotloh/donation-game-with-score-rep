@@ -34,22 +34,19 @@ FORM = [
 
 
 def layout():
+    return html.Div([html.H1("Parameters"), dcc.Store(id="p-scores"), html.Div(id="p-body")])
+
+
+def actions():
     return html.Div(
         [
-            html.H1("Parameters"),
-            dcc.Store(id="p-scores"),
-            html.Div(id="p-body"),
-            html.Div(
-                [
-                    html.Button("← Strategies", id="p-back", className="secondary", n_clicks=0),
-                    html.Button("Save settings", id="p-save", className="secondary", n_clicks=0),
-                    dcc.Download(id="p-download"),
-                    html.Div(id="p-run-error", className="status error"),
-                    html.Button("Run", id="p-run", className="primary", n_clicks=0),
-                ],
-                className="actions",
-            ),
-        ]
+            html.Button("← Strategies", id="p-back", className="secondary", n_clicks=0),
+            html.Button("Save settings", id="p-save", className="secondary", n_clicks=0),
+            dcc.Download(id="p-download"),
+            html.Div(id="p-run-error", className="status error"),
+            html.Button("Run", id="p-run", className="primary", n_clicks=0),
+        ],
+        className="actions",
     )
 
 
@@ -59,7 +56,7 @@ def defaults(n):
         "shares": [share] * n,
         "scores": [{"score": 0, "mass": 0.5}, {"score": 1, "mass": 0.5}],
         "norm": spec.norm_from_barcode(list(spec.NORM_PRESETS.values())[0], "binary"),
-        "noise": {"eps": "0.01", "eps_up": "0.5", "eps_down": "0.5"},
+        "noise": {"eps": "0.05", "eps_up": "0.3", "eps_down": "0.7"},
         "interactions": {"p_can": "0.5", "benefit": f"{spec.DEFAULT_ADVANCED['benefit']:g}",
                          "cost": f"{spec.DEFAULT_ADVANCED['cost']:g}"},
         "advanced": {k: f"{spec.DEFAULT_ADVANCED[k]:g}" for k in ("dt", "n_steps", "max_iter", "tol", "resolution")},
@@ -77,7 +74,7 @@ def form(strategies, params):
     params = {**base, **(params or {})}
     if len(params["shares"]) != n:
         params["shares"] = base["shares"]
-    norm = params["norm"]
+    norm = usable_norm(params["norm"], base["norm"])
     noise, inter, adv = params["noise"], params["interactions"], params["advanced"]
     return [
         html.Div(
@@ -154,6 +151,18 @@ def form(strategies, params):
     ]
 
 
+def usable_norm(norm, fallback):
+    """A stored norm cfg that can be drawn, with tau 2 if a ternary norm has none; fallback if invalid."""
+    try:
+        norm = dict(norm)
+        if norm["type"] == "ternary" and not norm.get("tau"):
+            norm["tau"] = 2
+        spec.build_norm(norm)
+        return norm
+    except Exception:  # noqa: BLE001
+        return fallback
+
+
 def norm_grids(norm):
     n = 3 if norm["type"] == "ternary" else 2
     labels = spec.class_labels(norm["type"], norm.get("tau"))
@@ -192,7 +201,7 @@ def register(app):
         if not strategies or len(strategies) < 2:
             return html.P(["Choose strategies first. ", dcc.Link("Back to strategies", href="/")]), []
         params = params or defaults(len(strategies))
-        return form(strategies, params), params.get("scores", defaults(2)["scores"])
+        return form(strategies, params) + [actions()], params.get("scores", defaults(2)["scores"])
 
     @app.callback(
         Output("store-params", "data", allow_duplicate=True),
@@ -202,11 +211,12 @@ def register(app):
     def remember(shares, scores, norm_type, tau, cn, nc, eps, eps_up, eps_down, q, b, c, dt, steps, maxiter, tol, res):
         if not shares:
             return no_update
+        bits = "".join(cn or [])
         return {
             "shares": shares,
             "scores": scores or [],
-            "norm": {"type": norm_type, "tau": validation.positive_int(tau, "τ")[0], "CN": "".join(cn or []),
-                     "NC": "".join(nc or [])},
+            "norm": {"type": "ternary" if len(bits) == 18 else "binary", "tau": validation.positive_int(tau, "τ")[0],
+                     "CN": bits, "NC": "".join(nc or [])},
             "noise": {"eps": eps, "eps_up": eps_up, "eps_down": eps_down},
             "interactions": {"p_can": q, "benefit": b, "cost": c},
             "advanced": {"dt": dt, "n_steps": steps, "max_iter": maxiter, "tol": tol, "resolution": res},
@@ -277,6 +287,7 @@ def register(app):
         Output("p-norm-type", "value"),
         Output("p-norm-tau-row", "style"),
         Output("p-norm-preset", "value"),
+        Output("p-norm-tau", "value"),
         Input("p-norm-type", "value"),
         Input("p-norm-tau", "value"),
         Input("p-norm-preset", "value"),
@@ -287,35 +298,42 @@ def register(app):
         prevent_initial_call=True,
     )
     def edit_norm(kind, tau, preset, apply, cn, nc, barcode):
+        """The grid's bits are the norm; the radio and tau follow them, so they can't disagree."""
         trigger = ctx.triggered_id
+        grid_type = "ternary" if len(cn) == 18 else "binary"
         tau_value, tau_error = validation.positive_int(tau, "τ")
-        tau_style = {} if kind == "ternary" else {"display": "none"}
-        if kind == "ternary" and tau_error:
-            return no_update, status(tau_error, False), no_update, tau_style, no_update
-        current = {"type": "ternary" if len(cn) == 18 else "binary", "tau": tau_value, "CN": "".join(cn),
-                   "NC": "".join(nc)}
+        show, hide = {}, {"display": "none"}
+        keep = no_update
         try:
             if trigger == "p-norm-preset":
                 if not preset:
-                    return no_update, None, no_update, tau_style, no_update
+                    return keep, None, keep, keep, keep, keep
                 norm = spec.norm_from_barcode(spec.NORM_PRESETS[preset], "binary")
-                return norm_grids(norm), None, "binary", {"display": "none"}, preset
+                return norm_grids(norm), None, "binary", hide, preset, keep
             if trigger == "p-apply":
+                if kind == "ternary" and tau_error:
+                    return keep, status(tau_error, False), keep, keep, keep, keep
                 norm = spec.norm_from_barcode(barcode or "", kind, tau_value)
-                return norm_grids(norm), status("Applied.", True), no_update, tau_style, None
+                return norm_grids(norm), status("Applied.", True), keep, keep, None, keep
             if trigger == "p-norm-type":
-                if kind == current["type"]:
-                    return no_update, None, no_update, tau_style, no_update
+                if kind == grid_type:
+                    return keep, None, keep, show if kind == "ternary" else hide, keep, keep
                 if kind == "ternary":
+                    tau_value = tau_value or 2
+                    current = {"type": "binary", "tau": None, "CN": "".join(cn), "NC": "".join(nc)}
                     lifted = spec.build_norm(current).to_ternary(tau_value)
                     norm = spec.norm_from_barcode(lifted.barcode, "ternary", tau_value)
-                else:
-                    norm = spec.default_norm("binary")
-                return norm_grids(norm), None, no_update, tau_style, None
-            # tau changed: same bits, new labels.
-            return norm_grids(current), None, no_update, tau_style, no_update
+                    return norm_grids(norm), None, keep, show, None, str(tau_value)
+                return norm_grids(spec.default_norm("binary")), None, keep, hide, None, keep
+            # tau changed: the same bits with new labels.
+            if grid_type != "ternary":
+                return keep, None, keep, keep, keep, keep
+            if tau_error:
+                return keep, status(tau_error, False), keep, keep, keep, keep
+            norm = {"type": "ternary", "tau": tau_value, "CN": "".join(cn), "NC": "".join(nc)}
+            return norm_grids(norm), None, keep, keep, keep, keep
         except (ValueError, KeyError) as error:
-            return no_update, status(f"Not a valid barcode: {error}", False), no_update, tau_style, no_update
+            return keep, status(f"Not a valid barcode: {error}", False), keep, keep, keep, keep
 
     @app.callback(
         Output("p-barcode", "value"),
@@ -396,6 +414,7 @@ def experiment_from_inputs(strategies, shares, scores, norm_type, tau, cn, nc, e
     inter, error = interactions(q, b, c)
     if error:
         return None, error
+    norm_type = "ternary" if len(cn) == 18 else "binary"     # the grid's bits decide the type
     tau_value = None
     if norm_type == "ternary":
         tau_value, error = validation.positive_int(tau, "τ")
@@ -418,12 +437,12 @@ def experiment_from_inputs(strategies, shares, scores, norm_type, tau, cn, nc, e
         numbers[key], error = validation.positive_int(value, what)
         if error:
             return None, error
-    total = sum(e["mass"] for e in scores)
+    total = sum(float(e["mass"]) for e in scores)
     experiment = {
         "version": spec.VERSION,
         "strategies": strategies,
         "shares": rho.tolist(),
-        "scores": [{"score": e["score"], "mass": e["mass"] / total} for e in scores],
+        "scores": [{"score": int(e["score"]), "mass": float(e["mass"]) / total} for e in scores],
         "norm": norm,
         "noise": noise,
         **inter,

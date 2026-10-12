@@ -112,6 +112,7 @@ def _full_flow(page):
     page.wait_for_function("!document.querySelector('#s-add').disabled")
     page.click("#s-add")
     page.wait_for_selector(".selected-item >> nth=2")
+    assert "0,0,0|0,g,0.5|0,g,g (tau=2)" in page.inner_text(".selected-item >> nth=2")   # stored as typed
     assert page.locator("#s-add").is_disabled()           # at most 3
     shot(page, "1_strategies")
     page.click("#s-next")
@@ -131,6 +132,17 @@ def _full_flow(page):
     set_text(page, "#p-mass", "0.3")
     page.click("#p-add-score")
     page.wait_for_selector("#p-score-table .status.ok")
+    # Norm type and tau stay consistent with the grid, even with tau cleared in between.
+    cn_bits = "document.querySelectorAll('#p-norm-grid table')[0].querySelectorAll('td').length"
+    page.locator("#p-norm-type").get_by_text("Ternary").click()
+    page.wait_for_function(f"{cn_bits} === 18")
+    set_text(page, "#p-norm-tau", "")
+    page.wait_for_selector("#p-norm-status .status.error")
+    page.locator("#p-norm-type").get_by_text("Binary").click()
+    page.wait_for_function(f"{cn_bits} === 8")
+    page.locator("#p-norm-type").get_by_text("Ternary").click()
+    page.wait_for_function(f"{cn_bits} === 18")
+    assert page.input_value("#p-norm-tau") == "2"
     choose(page, "p-norm-preset", "Lose a score for not helping someone with a score")
     page.wait_for_function("document.querySelector('#p-barcode').value === 'CN:00000-00 NC:00000000'")
     set_text(page, "#p-eps", "0.1")
