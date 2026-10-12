@@ -59,6 +59,25 @@ The chains run until the largest change in a step is at most `tol` (default
 `ESSFinder` finds the ESS among a set of strategies, as `find_ESS` in
 `helper_funcs.jl` does.
 
+## Replicator dynamics
+
+```python
+solver = StableScoreSolver(norm, Noise(eps=0.1, eps_up=0.2, eps_down=0.4), max_iter=1000)
+dynamics = ReplicatorDynamics(solver, Payoffs(benefit=2, cost=1), dt=0.1)
+trajectory = dynamics.run([PhiDisc(1), Defectors()], rho=[0.9, 0.1], w_init=[0.5, 0.5], n_steps=500)
+
+trajectory.rho               # (T, n) strategy frequencies over time
+trajectory.scores_converged  # False where the score chains hit max_iter
+```
+
+Each step restarts the score chains from `w_init`, runs them until they
+converge or reach `max_iter`, computes the payoff matrix from the resulting
+help probabilities and takes an Euler step of d ρ_i/dt = ρ_i (π_i − π̄). Where
+the chains don't converge (scores drifting upwards for ever, or money spreading
+out), payoffs come from the distribution after `max_iter` steps, so they
+depend on `w_init` and `max_iter`. `warm_start=True` continues the chains from
+the previous step instead.
+
 ## Tests
 
 ```
