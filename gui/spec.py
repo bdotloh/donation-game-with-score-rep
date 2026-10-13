@@ -3,8 +3,9 @@
 strategy: {"type": "binary" | "ternary" | "phi", "name": str, "P": [[p, ...], ...], "tau": int, "phi": float}
 norm:     {"type": "binary" | "ternary", "tau": int, "CN": "8 or 18 of -0+", "NC": "..."}
 experiment: {"version": 1, "strategies": [...], "shares": [...], "scores": [{"score", "mass"}, ...],
-             "norm": {...}, "noise": {"eps", "eps_up", "eps_down"}, "benefit", "cost", "dt", "n_steps",
-             "max_iter", "tol", "resolution"}
+             "norm": {...}, "noise": {"eps", "eps_up", "eps_down"}, "p_can", "benefit", "cost", "dt",
+             "n_steps", "max_iter", "tol", "resolution", "full_steps"}
+full_steps: run every score chain for max_iter steps instead of stopping at the tolerance.
 """
 
 import numpy as np
@@ -43,10 +44,12 @@ DEFAULT_ADVANCED = {
     "cost": 1.0,
     "dt": 1.0,
     "n_steps": 100,
-    "max_iter": 1000,
+    "max_iter": 2000,
     "tol": 1e-6,
-    "resolution": 10,
+    "resolution": 20,
+    "full_steps": True,
 }
+TAIL_TOL = 1e-15        # scores whose mass falls below this everywhere are dropped (keeps long runs fast)
 
 
 def class_labels(kind, tau=None):
@@ -115,7 +118,8 @@ def build(experiment):
     norm = build_norm(experiment["norm"])
     noise = Noise(**experiment["noise"])
     roles = role_factor(experiment.get("p_can", 0.5))
-    solver = StableScoreSolver(norm, noise, tol=experiment["tol"], max_iter=experiment["max_iter"], role_factor=roles)
+    solver = StableScoreSolver(norm, noise, tol=experiment["tol"], max_iter=experiment["max_iter"], role_factor=roles,
+                               force_max_iter=bool(experiment.get("full_steps", False)), tail_tol=TAIL_TOL)
     payoffs = Payoffs(benefit=experiment["benefit"], cost=experiment["cost"], role_factor=roles)
     dynamics = ReplicatorDynamics(solver, payoffs, dt=experiment["dt"])
     return {

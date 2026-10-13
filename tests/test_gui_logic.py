@@ -127,7 +127,8 @@ def test_simplex_figures():
 def test_histogram_and_heatmaps():
     w = np.array([[0.5, 0.3, 0.2, 0], [0.1, 0.2, 0.3, 0.4]])
     fig = figures.score_histogram(["A", "B"], [0.25, 0.75], w, hidden=["B"])
-    assert {t.name for t in fig.data if t.showlegend is not False} == {"A", "population"}
+    assert {t.name for t in fig.data if t.showlegend is not False} == {"S1 · A", "population"}
+    assert fig.layout.barmode == "overlay"
     figures.matrix_heatmap(np.array([[0.1, -0.2], [0.3, 0.0]]), ["A", "B"], "A", "strategy", "against", diverging=True)
 
 
@@ -213,3 +214,22 @@ def test_repeated_scores_are_merged_on_load():
 
     assert merged_scores([{"score": 1, "mass": 0.25}, {"score": 0, "mass": 0.5}, {"score": 1.0, "mass": 0.25}]) == [
         {"score": 0, "mass": 0.5}, {"score": 1, "mass": 0.5}]
+
+
+def test_flow_lines_follow_the_field():
+    """Flow lines of a field pointing at one corner run towards it and stay inside the triangle."""
+    grid = np.array([(i, j, 10 - i - j) for i in range(11) for j in range(11 - i)]) / 10
+    velocities = np.array([0, 0, 1.0]) - grid        # straight towards the top corner
+    xs, ys = figures.flow_lines(grid, velocities)
+    assert xs.count(None) >= 5                       # several lines
+    points = [(x, y) for x, y in zip(xs, ys) if x is not None]
+    rho = np.array([figures.from_xy(x, y) for x, y in points])
+    assert rho.min() > -1e-6
+    lines, current = [], []
+    for x, y in zip(xs, ys):
+        if x is None:
+            lines.append(current)
+            current = []
+        else:
+            current.append(y)
+    assert all(line[-1] >= line[0] for line in lines)   # every line climbs towards the top corner

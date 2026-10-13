@@ -30,6 +30,7 @@ FORM = [
     ("p-maxiter", "value"),
     ("p-tol", "value"),
     ("p-resolution", "value"),
+    ("p-full", "value"),
 ]
 
 
@@ -56,10 +57,11 @@ def defaults(n):
         "shares": [share] * n,
         "scores": [{"score": 0, "mass": 0.5}, {"score": 1, "mass": 0.5}],
         "norm": spec.norm_from_barcode(list(spec.NORM_PRESETS.values())[0], "binary"),
-        "noise": {"eps": "0.05", "eps_up": "0.3", "eps_down": "0.7"},
+        "noise": {"eps": "0.1", "eps_up": "0.5", "eps_down": "0.5"},
         "interactions": {"p_can": "0.5", "benefit": f"{spec.DEFAULT_ADVANCED['benefit']:g}",
                          "cost": f"{spec.DEFAULT_ADVANCED['cost']:g}"},
-        "advanced": {k: f"{spec.DEFAULT_ADVANCED[k]:g}" for k in ("dt", "n_steps", "max_iter", "tol", "resolution")},
+        "advanced": {**{k: f"{spec.DEFAULT_ADVANCED[k]:g}" for k in ("dt", "n_steps", "max_iter", "tol", "resolution")},
+                     "full_steps": spec.DEFAULT_ADVANCED["full_steps"]},
     }
 
 
@@ -126,6 +128,10 @@ def form(strategies, params):
                             field("Arrow grid", text_input("p-resolution", adv["resolution"], mode="numeric"),
                                   hint="Points per side of the simplex."),
                         ], className="row wrap"),
+                        dcc.Checklist(id="p-full", className="checks",
+                                      options=[{"label": "Run every score chain for all the iterations",
+                                                "value": "full"}],
+                                      value=["full"] if adv.get("full_steps", True) else []),
                     ], className="advanced"),
                 ]),
             ],
@@ -208,7 +214,8 @@ def register(app):
         *[Input(i, p) for i, p in FORM],
         prevent_initial_call=True,
     )
-    def remember(shares, scores, norm_type, tau, cn, nc, eps, eps_up, eps_down, q, b, c, dt, steps, maxiter, tol, res):
+    def remember(shares, scores, norm_type, tau, cn, nc, eps, eps_up, eps_down, q, b, c, dt, steps, maxiter, tol, res,
+                 full):
         if not shares:
             return no_update
         bits = "".join(cn or [])
@@ -219,7 +226,8 @@ def register(app):
                      "CN": bits, "NC": "".join(nc or [])},
             "noise": {"eps": eps, "eps_up": eps_up, "eps_down": eps_down},
             "interactions": {"p_can": q, "benefit": b, "cost": c},
-            "advanced": {"dt": dt, "n_steps": steps, "max_iter": maxiter, "tol": tol, "resolution": res},
+            "advanced": {"dt": dt, "n_steps": steps, "max_iter": maxiter, "tol": tol, "resolution": res,
+                         "full_steps": bool(full)},
         }
 
     @app.callback(Output("p-shares-status", "children"), Input({"type": "p-share", "index": ALL}, "value"))
@@ -398,7 +406,7 @@ def interactions(q, b, c):
 
 
 def experiment_from_inputs(strategies, shares, scores, norm_type, tau, cn, nc, eps, eps_up, eps_down, q, b, c,
-                           dt, steps, maxiter, tol, resolution):
+                           dt, steps, maxiter, tol, resolution, full=("full",)):
     """A validated experiment dict, or the first error message."""
     if not strategies or not 2 <= len(strategies) <= spec.MAX_STRATEGIES:
         return None, "Choose 2 or 3 strategies first."
@@ -449,5 +457,6 @@ def experiment_from_inputs(strategies, shares, scores, norm_type, tau, cn, nc, e
         "dt": dt_value,
         "tol": tol_value,
         **numbers,
+        "full_steps": bool(full),
     }
     return experiment, ""

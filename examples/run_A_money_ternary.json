@@ -1,0 +1,95 @@
+{
+  "version": 1,
+  "shares": [
+    0.3333333333333333,
+    0.3333333333333333,
+    0.3333333333333333
+  ],
+  "scores": [
+    {
+      "score": 0,
+      "mass": 0.5
+    },
+    {
+      "score": 1,
+      "mass": 0.5
+    }
+  ],
+  "norm": {
+    "type": "binary",
+    "tau": null,
+    "CN": "00000-++",
+    "NC": "00000+--"
+  },
+  "noise": {
+    "eps": 0.1,
+    "eps_up": 0.5,
+    "eps_down": 0.5
+  },
+  "p_can": 0.5,
+  "benefit": 2.0,
+  "cost": 1.0,
+  "dt": 1.0,
+  "n_steps": 100,
+  "max_iter": 2000,
+  "tol": 1e-06,
+  "resolution": 20,
+  "full_steps": true,
+  "strategies": [
+    {
+      "type": "binary",
+      "name": "Defectors",
+      "P": [
+        [
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          0.0
+        ]
+      ],
+      "tau": null,
+      "phi": null
+    },
+    {
+      "type": "binary",
+      "name": "AllD-Disc",
+      "P": [
+        [
+          0.0,
+          0.0
+        ],
+        [
+          0.0,
+          1.0
+        ]
+      ],
+      "tau": null,
+      "phi": null
+    },
+    {
+      "type": "ternary",
+      "name": "Ternary (τ=5)",
+      "P": [
+        [
+          0,
+          0,
+          0
+        ],
+        [
+          0,
+          1,
+          0
+        ],
+        [
+          0,
+          1,
+          0
+        ]
+      ],
+      "tau": 5,
+      "phi": null
+    }
+  ]
+}

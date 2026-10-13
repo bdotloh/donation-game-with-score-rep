@@ -295,5 +295,6 @@ def params_from_experiment(experiment):
         "noise": {k: fmt(number(experiment["noise"][k])) for k in ("eps", "eps_up", "eps_down")},
         "interactions": {"p_can": fmt(number(experiment.get("p_can", 0.5))), "benefit": fmt(number(experiment["benefit"])),
                          "cost": fmt(number(experiment["cost"]))},
-        "advanced": {k: fmt(number(experiment[k])) for k in ("dt", "n_steps", "max_iter", "tol", "resolution")},
+        "advanced": {**{k: fmt(number(experiment[k])) for k in ("dt", "n_steps", "max_iter", "tol", "resolution")},
+                     "full_steps": bool(experiment.get("full_steps", False))},
     }

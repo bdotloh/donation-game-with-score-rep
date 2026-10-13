@@ -262,3 +262,15 @@ def test_concurrent_rate_evaluations():
     for t in threads:
         t.join()
     assert not errors
+
+
+def test_tail_trimming_barely_changes_results():
+    money = ScoringNorm.from_barcode("CN:00000-++ NC:00000+--")
+    population = Population([Discriminators(), Defectors(), PhiDisc(0.17)], [0.3, 0.3, 0.4])
+    exact = StableScoreSolver(money, Noise.from_noise_val(0.1), max_iter=2000, force_max_iter=True)(population, [0.5, 0.5])
+    trimmed = StableScoreSolver(money, Noise.from_noise_val(0.1), max_iter=2000, force_max_iter=True,
+                                tail_tol=1e-15)(population, [0.5, 0.5])
+    assert trimmed.w.shape[1] < exact.w.shape[1] / 3
+    L = trimmed.w.shape[1]
+    np.testing.assert_allclose(trimmed.w, exact.w[:, :L], atol=1e-12)
+    np.testing.assert_allclose(Payoffs()(population, trimmed.w), Payoffs()(population, exact.w), atol=1e-12)

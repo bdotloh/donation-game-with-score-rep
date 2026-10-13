@@ -113,17 +113,22 @@ def register(app):
         converged = np.array([r.converged for r in run.grid_results])
         fig = figures.simplex_figure(run.names, run.grid, [r.velocity for r in run.grid_results], converged,
                                      run.rest_point_dicts(), trajectory=run.trajectory.rho,
-                                     current=run.trajectory.rho[0])
+                                     current=run.trajectory.rho[0], labels=run.labels)
         note = []
-        if not converged.all() or not run.trajectory.scores_converged.all():
+        if not converged.any():
+            note.append("The score chains don't converge anywhere here (no stable score distribution), so all "
+                        "values are those after the set number of score iterations.")
+        elif not converged.all() or not run.trajectory.scores_converged.all():
             note.append("Lighter arrows: the score chains didn't converge within the maximum number of iterations, "
                         "so values there depend on that maximum and on the initial scores.")
         if run.trajectory.at_rest:
             note.append(f"The trajectory reached a rest point at t = {run.trajectory.t[-1]:g}.")
-        composition = [field(name, dcc.Input(id={"type": "r-share", "index": i}, type="text", inputMode="decimal",
-                                             value=f"{run.rho0[i]:.4g}", className="num"))
-                       for i, name in enumerate(run.names)]
-        options = [{"label": n, "value": n} for n in run.names] + [{"label": "population", "value": "population"}]
+        composition = [field(f"{label} · {name}",
+                             dcc.Input(id={"type": "r-share", "index": i}, type="text", inputMode="decimal",
+                                       value=f"{run.rho0[i]:.4g}", className="num"))
+                       for i, (label, name) in enumerate(zip(run.labels, run.names))]
+        options = ([{"label": f"{l} · {n}", "value": n} for l, n in zip(run.labels, run.names)]
+                   + [{"label": "population", "value": "population"}])
         values = [o["value"] for o in options]
         selection = {"kind": "frame", "frame": 0}
         return (None, {}, True, fig, " ".join(note), composition, len(run.trajectory.t) - 1, options, values,
@@ -180,11 +185,11 @@ def register(app):
             state = run.point(selection["rho"])
         shown = shown or []
         hidden = [n for n in run.names if n not in shown]
-        hist = figures.score_histogram(run.names, state["rho"], state["w"], hidden=hidden,
+        hist = figures.score_histogram(run.names, state["rho"], state["w"], hidden=hidden, labels=run.labels,
                                        show_marginal="population" in shown)
-        payoff = figures.matrix_heatmap(state["payoff_matrix"], run.names, "Payoff matrix A  (π = Aρ)",
+        payoff = figures.matrix_heatmap(state["payoff_matrix"], run.labels, "Payoff matrix A  (π = Aρ)",
                                         "strategy", "against", diverging=True)
-        help_ = figures.matrix_heatmap(state["help_matrix"], run.names, "Helping rates H", "donor", "receiver")
+        help_ = figures.matrix_heatmap(state["help_matrix"], run.labels, "Helping rates H", "donor", "receiver")
         time = f"t = {state['time']:g}" if state["time"] is not None else "selected point"
         patch = Patch()
         if run.n == 3:
@@ -279,7 +284,8 @@ def summary(run, state):
     header = html.Tr([html.Th(""), html.Th("share"), html.Th("payoff π"), html.Th("dρ/dt"), html.Th("w₀"),
                       html.Th("mean score")])
     rows = [
-        html.Tr([html.Th(html.Span(name, style={"color": figures.COLORS[i]})), html.Td(f"{rho[i]:.4f}"),
+        html.Tr([html.Th(html.Span([html.B(run.labels[i]), f" {name}"], style={"color": figures.COLORS[i]})),
+                 html.Td(f"{rho[i]:.4f}"),
                  html.Td(f"{pi[i]:.4f}"), html.Td(f"{v[i]:+.2g}"), html.Td(f"{w[i, 0]:.4f}"),
                  html.Td(f"{scores @ w[i]:.3f}")])
         for i, name in enumerate(run.names)
@@ -295,7 +301,7 @@ def summary(run, state):
 
 def results_zip(run, selection):
     """Settings, trajectory, vector field, rest points and the selected point, as CSV/JSON in a zip."""
-    names = run.names
+    names = run.labels                     # column names S1, S2, S3; settings.json has the strategies
     buffer = io.BytesIO()
     with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as z:
         z.writestr("settings.json", json.dumps(run.experiment, indent=2))
@@ -316,7 +322,7 @@ def results_zip(run, selection):
         if selection:
             state = run.frame(selection["frame"]) if selection["kind"] == "frame" else run.point(selection["rho"])
             z.writestr("selected_point.json", json.dumps({
-                "strategies": names,
+                "strategies": dict(zip(run.labels, run.names)),
                 "share": list(state["rho"]),
                 "payoff": list(state["payoffs"]),
                 "velocity": list(state["velocity"]),

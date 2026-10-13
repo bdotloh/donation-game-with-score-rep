@@ -45,7 +45,10 @@ class StableScoreSolver:
         force_max_iter=False,
         record_history=False,
         role_factor=ROLE_FACTOR,
+        tail_tol=0.0,
     ):
+        """tail_tol > 0 drops the top scores whose mass is below tail_tol in every chain after each
+        step (and renormalises), so long runs don't carry thousands of near-empty scores."""
         self.norm = norm
         self.noise = noise or Noise()
         self.rates = TransitionRates(norm, self.noise, role_factor)
@@ -54,6 +57,7 @@ class StableScoreSolver:
         self.stop_when_transient = stop_when_transient
         self.force_max_iter = force_max_iter
         self.record_history = record_history
+        self.tail_tol = tail_tol
 
     def with_options(self, **options):
         """Copy of this solver with some settings (tol, max_iter, ...) changed."""
@@ -78,6 +82,8 @@ class StableScoreSolver:
             dw = chain.change(w_prev, rates.g, rates.f)
             w = w_prev + dw
             w = w / w.sum(axis=1, keepdims=True)
+            if self.tail_tol > 0:
+                w = _trim(w, self.tail_tol, n_init)
             if self.record_history:
                 history.append((w, rates))
             transient = self.stop_when_transient and np.all(w[:, :n_init].sum(axis=1) == 0.0)
@@ -102,3 +108,13 @@ class StableScoreSolver:
             transient=transient,
             history=history,
         )
+
+
+def _trim(w, tail_tol, n_keep):
+    """Drop the top scores whose mass is below tail_tol in every chain (keeping at least n_keep)."""
+    significant = np.flatnonzero((w > tail_tol).any(axis=0))
+    keep = max(n_keep, significant[-1] + 1 if significant.size else 1)
+    if keep >= w.shape[1]:
+        return w
+    w = w[:, :keep]
+    return w / w.sum(axis=1, keepdims=True)

@@ -21,6 +21,7 @@ class Run:
         self.experiment = experiment
         built = spec.build(experiment)
         self.names = built["names"]
+        self.labels = [f"S{i + 1}" for i in range(len(self.names))]
         self.strategies = built["strategies"]
         self.rho0 = built["rho0"]
         self.w_init = built["w_init"]
