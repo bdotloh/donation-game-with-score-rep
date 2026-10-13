@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Empirically verify limiting claims for the eight initial-rate groups."""
+"""Empirically verify limiting claims for the eight initial-rate groups.
+
+The claims are about a chain capped at maxw (mass at maxw can only move down), so
+this script runs its own capped chain; the rates come from the engine.
+"""
 
 import argparse
 import csv
@@ -11,11 +15,9 @@ import sys
 
 import numpy as np
 
-SRC_DIR = Path(__file__).resolve().parents[2] / "src"
-sys.path.insert(0, str(SRC_DIR))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from compute_score_transitions import ComputeTransitionRates
-from helpers import parse_bb_string, parse_strategy_string
+from engine import BinaryStrategy, Noise, Population, ScoringNorm, TransitionRates  # noqa: E402
 
 
 GROUP_TO_CONDITION = {
@@ -39,6 +41,19 @@ EXPECTED_RESULTS = {
     "g": "No mass moves above the initial support.",
     "h": "Exploratory all-positive case.",
 }
+
+
+class RateFunction:
+    """alpha, beta, gamma of a one-strategy population as a function of its class masses
+    (P(score 0), P(score > 0)), without noise."""
+
+    def __init__(self, bb_string, strategy_string):
+        self.rates = TransitionRates(ScoringNorm.from_barcode(bb_string), Noise())
+        self.population = Population([BinaryStrategy.from_name(strategy_string)])
+
+    def __call__(self, classes):
+        rates = self.rates(self.population, np.array([[classes[0], classes[1], 0.0]]))
+        return rates.g[0, 1], rates.g[0, 2], rates.f[0, 1]
 
 
 def evolve_to_stationarity(rate_computer, w_0, max_steps, tolerance):
@@ -91,9 +106,7 @@ def expected_error(condition, final_w, initial_w):
 
 def verify_combo(job):
     row, maxw, max_steps, stationary_tolerance, claim_tolerance = job
-    bb = parse_bb_string(row["bb_string"], n_rep_states=2)
-    strategy = parse_strategy_string(row["strategy"], n_rep_states=2)
-    rate_computer = ComputeTransitionRates(bb, strategy)
+    rate_computer = RateFunction(row["bb_string"], row["strategy"])
     initial_w = np.zeros(maxw + 1)
     initial_w[:2] = (0.5, 0.5)
     final_w, steps, final_change, converged = evolve_to_stationarity(
@@ -128,9 +141,7 @@ def verify_combo(job):
 
 
 def rate_signature(row):
-    bb = parse_bb_string(row["bb_string"], n_rep_states=2)
-    strategy = parse_strategy_string(row["strategy"], n_rep_states=2)
-    rate_computer = ComputeTransitionRates(bb, strategy)
+    rate_computer = RateFunction(row["bb_string"], row["strategy"])
     rates_at_zero = rate_computer(np.array([0.0, 1.0]))
     rates_at_one = rate_computer(np.array([1.0, 0.0]))
     return tuple(rates_at_zero) + tuple(rates_at_one)

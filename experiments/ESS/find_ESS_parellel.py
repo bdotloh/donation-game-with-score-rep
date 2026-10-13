@@ -1,13 +1,17 @@
-# run_bigb_parallel.py
+"""Find the ESS among a set of strategies for every scoring norm (Big Brother) of a sweep,
+one norm per worker, and save one CSV row per (norm, ESS).
 
-from concurrent.futures import ProcessPoolExecutor
-import os
-import time
+Uses engine.ESSFinder, which follows find_ESS in helper_funcs.jl.
+"""
+
 import csv
-import numpy as np
-from pathlib import Path
+import os
 import sys
 import time
+from concurrent.futures import ProcessPoolExecutor
+from pathlib import Path
+
+import numpy as np
 
 try:
     from tqdm import tqdm
@@ -18,13 +22,55 @@ except ImportError:
             yield result
         print()
 
-src_path = Path(__file__).resolve().parents[2] / "src"
-sys.path.insert(0, str(src_path))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-from find_ESS import Find_ESS
-from helpers import generate_bb_strings, parse_bb_string, parse_strategy_string
-import compute_payoff
-import compute_stable
+from engine import (  # noqa: E402
+    BinaryStrategy,
+    ESSFinder,
+    Noise,
+    Payoffs,
+    Population,
+    ScoringNorm,
+    StableScoreSolver,
+    TernaryStrategy,
+    all_norms,
+)
+
+
+def bigb_name(norm):
+    """Barcode in the "CmeetsN:... NmeetsC:..." spelling that plot_results.py reads."""
+    cn, nc = (part.split(":")[1] for part in norm.barcode.split())
+    return f"CmeetsN:{cn} NmeetsC:{nc}"
+
+
+def class_tau(n_rep_states, rich_threshold):
+    """The engine's tau (None for binary). Classes {0}, {1..k-1}, {>=k} with k = rich_threshold are tau = k - 1."""
+    if n_rep_states == 2:
+        if rich_threshold not in (None, 0):
+            raise ValueError("For n_rep_states=2, rich_threshold must be None or 0.")
+        return None
+    if n_rep_states == 3:
+        if rich_threshold is None or rich_threshold < 2:
+            raise ValueError("For n_rep_states=3, rich_threshold must be an integer >= 2.")
+        return rich_threshold - 1
+    raise NotImplementedError(f"n_rep_states {n_rep_states} not implemented. Only 2 or 3 are supported.")
+
+
+def make_strategy(name, tau):
+    return BinaryStrategy.from_name(name) if tau is None else TernaryStrategy.from_name(name, tau)
+
+
+def class_rates(solver, population, w_prev, tau):
+    """alpha, beta, gamma (binary) or alpha, beta1, gamma1, beta2, gamma2 (ternary) of strategy 0:
+    up-rate from score 0, and up/down rates of a score in the middle (and top) class."""
+    top = 1 if tau is None else tau + 1         # lowest score of the top class
+    pad = max(0, top + 1 - w_prev.shape[1])     # rates are only given at tracked scores
+    rates = solver.rates(population, np.pad(w_prev, ((0, 0), (0, pad))))
+    g, f = rates.g[0], rates.f[0]
+    if tau is None:
+        return [g[1], g[2], f[1]]
+    return [g[1], g[2], f[1], g[top + 1], f[top]]
+
 
 def run_one_bigb(args):
     """
@@ -38,55 +84,35 @@ def run_one_bigb(args):
         w_init,
         rhoA,
         maxn,
-        maxw,
         benefit,
         cost,
         n_rep_states,
         rich_threshold,
         fit_threshold,
+        noise,
     ) = args
 
-    bb = parse_bb_string(bb_name, n_rep_states=n_rep_states)
+    tau = class_tau(n_rep_states, rich_threshold)
+    solver = StableScoreSolver(ScoringNorm.from_barcode(bb_name, tau), noise, max_iter=maxn)
+    finder = ESSFinder(solver, Payoffs(benefit, cost), rho=rhoA, fitness_threshold=fit_threshold)
+    invaders = [make_strategy(name, tau) for name in invader_options]
+    # fitness is the payoff without the role factor 1/4 (fit * 4 in helper_funcs.jl).
+    fitness = Payoffs(benefit, cost, role_factor=1)
 
-    finder = Find_ESS(
-        bb=bb,
-        w_init=w_init,
-        rhoA=rhoA,
-        maxn=maxn,
-        maxw=maxw,
-        benefit=benefit,
-        cost=cost,
-        n_rep_states=n_rep_states,
-        rich_threshold=rich_threshold,
-        fit_threshold=fit_threshold,
-    )
-
-    ess = finder(strategy_options, invader_options)
+    ess = []
     ess_details = []
-
-    for ess_name in ess:
-        strategy = parse_strategy_string(ess_name, n_rep_states=n_rep_states)
-        stable = compute_stable.with_1strategy(
-            bb,
-            strategy,
-            w_init,
-            maxn,
-            maxw,
-            n_rep_states,
-            rich_threshold,
-        )
-        fitness = compute_payoff.one_strategy(
-            strategy,
-            stable["w_prev_state"],
-            b=benefit,
-            c=cost,
-            role_factor=1
-        )
+    for ess_name in strategy_options:
+        strategy = make_strategy(ess_name, tau)
+        if not finder.is_ess(strategy, invaders, w_init):
+            continue
+        population = Population([strategy])
+        stable = solver(population, w_init)
+        ess.append(ess_name)
         ess_details.append({
             "name": ess_name,
-            "fitness": fitness,
-            "w": stable["w"],
-            "trans": stable["trans"],
+            "fitness": float(fitness(population, stable.w_prev)[0]),
+            "w": stable.w[0],
+            "trans": [float(x) for x in class_rates(solver, population, stable.w_prev, tau)],
         })
 
     return {
@@ -103,12 +129,12 @@ def find_ess_parallel_over_bigb(
     w_init,
     rhoA=0.99,
     maxn=100,
-    maxw=2,
     benefit=2,
     cost=1,
     n_rep_states=2,
-    rich_threshold=3,
+    rich_threshold=None,
     fit_threshold=1e-5,
+    noise=None,
     n_workers=None,
 ):
     if n_workers is None:
@@ -123,12 +149,12 @@ def find_ess_parallel_over_bigb(
             w_init,
             rhoA,
             maxn,
-            maxw,
             benefit,
             cost,
             n_rep_states,
             rich_threshold,
             fit_threshold,
+            noise or Noise(),
         )
         for bb_name in bigb_names
     ]
@@ -152,6 +178,8 @@ def find_ess_parallel_over_bigb(
 
 
 def save_results_csv(results, path="ess_results.csv"):
+    """One row per (norm, ESS). Ternary sweeps add beta2, gamma2 (alpha, beta, gamma are alpha, beta1, gamma1)."""
+    ternary = any(len(d["trans"]) == 5 for row in results for d in row["ess_details"])
     with open(path, "w", newline="") as f:
         writer = csv.writer(f)
         writer.writerow([
@@ -163,31 +191,25 @@ def save_results_csv(results, path="ess_results.csv"):
             "alpha",
             "beta",
             "gamma",
-        ])
+        ] + (["beta2", "gamma2"] if ternary else []))
 
         for row in results:
             bb_name = row["bb_name"]
             for detail in row["ess_details"]:
                 w = detail["w"]
-                alpha, beta, gamma = detail["trans"]
-
                 writer.writerow([
                     bb_name,
                     detail["name"],
                     detail["fitness"],
-                    w[0],
-                    w[1] if len(w) > 1 else 0.0,
-                    alpha,
-                    beta,
-                    gamma,
+                    float(w[0]),
+                    float(w[1]) if len(w) > 1 else 0.0,
+                    *detail["trans"],
                 ])
 
 
 if __name__ == "__main__":
-    # Match the tokens/CmeetsN-only setup in make_datas.jl.
-    bigb_names = sorted(generate_bb_strings(n_rep_states=3, nmeetsc=True))
-    print(len(bigb_names))
-    exit()
+    # Match the tokens/CmeetsN-only setup in make_datas.jl: 2^4 * 3^4 = 1296 BigBs.
+    bigb_names = sorted(bigb_name(norm) for norm in all_norms(use_NC=False))
     strategy_options = [
         f"{a},{b}|{c},{d}"
         for a in ["0", "g"]
@@ -201,10 +223,11 @@ if __name__ == "__main__":
     benefit = 2
     cost = 1
     fit_threshold = 0.01
+    noise = Noise.from_noise_val(0.0)   # NOISE_VAL in make_datas.jl
 
     print(f"BigBs: {len(bigb_names)}")
     print(f"ESS options and invaders: {len(strategy_options)}")
-    print(f"Noise: 0")
+    print(f"Noise: {noise.eps:g}")
     print(f"maxn: {maxn}")
 
     start_time = time.time()
@@ -214,14 +237,14 @@ if __name__ == "__main__":
         w_init=w_init,
         rhoA=0.99,
         maxn=maxn,
-        maxw=maxn,
         benefit=benefit,
         cost=cost,
         n_rep_states=2,
         rich_threshold=None,
         fit_threshold=fit_threshold,
+        noise=noise,
         n_workers=None,
     )
     end_time = time.time()
     print(f"Total runtime: {end_time - start_time:.3f} seconds")
-    save_results_csv(results, f"tokens_CmeetsN_Noise0_B{benefit}.csv")
+    save_results_csv(results, f"tokens_CmeetsN_Noise{noise.eps:g}_B{benefit}.csv")
