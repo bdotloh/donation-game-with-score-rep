@@ -77,6 +77,13 @@ def results_body():
         ),
         card("Score distribution", [
             dcc.Checklist(id="r-show-strategies", inline=True, className="checks"),
+            html.Div([
+                field("x from", dcc.Input(id="r-xmin", type="text", placeholder="auto", inputMode="decimal", className="num")),
+                field("x to", dcc.Input(id="r-xmax", type="text", placeholder="auto", inputMode="decimal", className="num")),
+                field("y from", dcc.Input(id="r-ymin", type="text", placeholder="auto", inputMode="decimal", className="num")),
+                field("y to", dcc.Input(id="r-ymax", type="text", placeholder="auto", inputMode="decimal", className="num")),
+                html.Div(id="r-range-error", className="status error"),
+            ], className="row bottom"),
             dcc.Graph(id="r-hist", config=GRAPH_CONFIG),
         ]),
         html.Div(
@@ -187,15 +194,21 @@ def register(app):
         Output("r-summary", "children"),
         Output("r-time", "children"),
         Output("r-simplex", "figure", allow_duplicate=True),
+        Output("r-range-error", "children"),
         Input("r-selection", "data"),
         Input("r-show-strategies", "value"),
+        Input("r-xmin", "value"),
+        Input("r-xmax", "value"),
+        Input("r-ymin", "value"),
+        Input("r-ymax", "value"),
         State("store-run", "data"),
         prevent_initial_call=True,
     )
-    def show_selection(selection, shown, run_id):
+    def show_selection(selection, shown, xmin, xmax, ymin, ymax, run_id):
         run = RUNS.get(run_id)
         if run is None or run.state != "done" or not selection:
-            return (no_update,) * 6
+            return (no_update,) * 7
+        x_range, y_range, range_error = axis_ranges(xmin, xmax, ymin, ymax)
         if selection["kind"] == "frame":
             state = run.frame(min(selection["frame"], len(run.trajectory.t) - 1))
         else:
@@ -206,7 +219,7 @@ def register(app):
         hidden = [n for n in names if n not in shown]
         hist = figures.score_histogram(names, np.asarray(state["rho"])[p], np.asarray(state["w"])[p], hidden=hidden,
                                        labels=labels, colors=[figures.COLORS[i] for i in p],
-                                       show_marginal="population" in shown)
+                                       show_marginal="population" in shown, x_range=x_range, y_range=y_range)
         payoff = figures.matrix_heatmap(np.asarray(state["payoff_matrix"])[np.ix_(p, p)], labels,
                                         "Payoff matrix A  (π = Aρ)", "strategy", "against", diverging=True)
         help_ = figures.matrix_heatmap(np.asarray(state["help_matrix"])[np.ix_(p, p)], labels, "Helping rates H",
@@ -218,7 +231,7 @@ def register(app):
             patch["data"][-1]["x"], patch["data"][-1]["y"] = list(x), list(y)
         else:
             patch["data"][-1]["x"], patch["data"][-1]["y"] = [state["rho"][1]], [0]
-        return hist, payoff, help_, summary(run, state, p), time, patch
+        return hist, payoff, help_, summary(run, state, p), time, patch, status(range_error, False)
 
     @app.callback(
         Output("r-player", "disabled"),
@@ -338,6 +351,29 @@ def strategy_table(cfg):
 def shade(p):
     """Cell colour that grows with the probability of helping."""
     return {"background": f"rgba(47, 95, 167, {0.06 + 0.42 * p:.2f})"}
+
+
+def axis_ranges(xmin, xmax, ymin, ymax):
+    """((x low, x high), (y low, y high), error): typed axis limits of the score distribution, None for auto.
+    A blank box is automatic; limits that can't be used are ignored with a message."""
+    values = []
+    for text, what in ((xmin, "x from"), (xmax, "x to"), (ymin, "y from"), (ymax, "y to")):
+        if text is None or str(text).strip() == "":
+            values.append(None)
+            continue
+        number = validation.parse_number(text)
+        if number is None:
+            return (None, None), (None, None), f"“{text}” is not a number ({what}); the axes are automatic."
+        values.append(number)
+    x_range, y_range = tuple(values[:2]), tuple(values[2:])
+    if x_range[1] is not None and x_range[1] > 5000:
+        return (None, None), (None, None), "x to can be at most 5000; the axes are automatic."
+    if y_range[0] is not None and y_range[0] < 0:
+        return (None, None), (None, None), "y from can't be negative; the axes are automatic."
+    for low, high, what in ((*x_range, "x"), (*y_range, "y")):
+        if low is not None and high is not None and low >= high:
+            return (None, None), (None, None), f"{what} from must be below {what} to; the axes are automatic."
+    return x_range, y_range, ""
 
 
 def present(rho, tol=1e-9):

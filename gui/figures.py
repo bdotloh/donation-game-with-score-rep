@@ -353,9 +353,10 @@ def _line_figure(names, labels, grid, velocities, converged, rest_points, trajec
 # ---------------------------------------------------------------- scores and matrices
 
 
-def score_histogram(names, rho, w, hidden=(), show_marginal=True, labels=None, colors=None):
+def score_histogram(names, rho, w, hidden=(), show_marginal=True, labels=None, colors=None, x_range=(None, None),
+                    y_range=(None, None)):
     """Conditional score distributions w[i] for each strategy (overlaid, semi-transparent), and the
-    population's marginal sum_i rho_i w[i]."""
+    population's marginal sum_i rho_i w[i]. x_range and y_range are (low, high) with None for automatic."""
     labels = labels or default_labels(len(names))
     colors = colors or COLORS
     w = np.asarray(w)
@@ -364,6 +365,8 @@ def score_histogram(names, rho, w, hidden=(), show_marginal=True, labels=None, c
     scores = np.arange(w.shape[1])
     tail = np.cumsum(w[:, ::-1], axis=1)[:, ::-1].max(axis=0)
     upper = max(5, int(np.nonzero(tail > 1e-4)[0].max()) + 1 if (tail > 1e-4).any() else 5)
+    if x_range[1] is not None:                      # show every score up to the requested end
+        upper = int(np.ceil(x_range[1]))
     upper = min(upper, w.shape[1] - 1)
     fig = go.Figure()
     ymax = 0
@@ -389,9 +392,14 @@ def score_histogram(names, rho, w, hidden=(), show_marginal=True, labels=None, c
         fig.add_trace(go.Scatter(x=[mean, mean], y=[0, 1], yaxis="y2", mode="lines", legendgroup="population",
                                  line=dict(color=MARGINAL, dash="dot", width=2), showlegend=False,
                                  hovertemplate=f"population: mean score {mean:.3f}<extra></extra>"))
+    x_low = -0.6 if x_range[0] is None else x_range[0]
+    x_high = upper + 0.6 if x_range[1] is None else x_range[1]
+    y_axis = dict(title="probability", rangemode="tozero")
+    if y_range != (None, None):
+        y_axis["range"] = [0 if y_range[0] is None else y_range[0], 1.05 * ymax if y_range[1] is None else y_range[1]]
     fig.update_layout(barmode="overlay", bargap=0.05,
-                      xaxis=dict(title="score  (dashed lines: mean scores)", range=[-0.6, upper + 0.6]),
-                      yaxis=dict(title="probability", rangemode="tozero"),
+                      xaxis=dict(title="score  (dashed lines: mean scores)", range=[x_low, x_high]),
+                      yaxis=y_axis,
                       yaxis2=dict(overlaying="y", range=[0, 1], visible=False, fixedrange=True),
                       legend=dict(orientation="h", y=1.08, x=0, xanchor="left"))
     return _layout(fig, height=380, hovermode="closest")

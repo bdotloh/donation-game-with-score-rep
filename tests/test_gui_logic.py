@@ -315,3 +315,25 @@ def test_the_steps_are_links():
     assert [s.href for s in steps] == [path for path, _ in STEPS]
     assert all(isinstance(s, dcc.Link) for s in steps)
     assert [s.className for s in steps] == ["step", "step active", "step"]
+
+
+def test_typed_axis_ranges():
+    from gui.pages.results import axis_ranges
+
+    assert axis_ranges("", None, " ", "") == ((None, None), (None, None), "")
+    assert axis_ranges("2", "30", "0", "0.1") == ((2.0, 30.0), (0.0, 0.1), "")
+    assert axis_ranges(None, "30", "", "") == ((None, 30.0), (None, None), "")
+    for bad in (("a", "5", "", ""), ("5", "2", "", ""), ("", "", "0.5", "0.1"), ("", "", "-1", ""), ("", "9999", "", "")):
+        x, y, error = axis_ranges(*bad)
+        assert error and x == y == (None, None)
+
+
+def test_histogram_uses_the_typed_ranges():
+    w = np.array([[0.5, 0.3, 0.1, 0.05, 0.05] + [0.0] * 30])
+    auto = figures.score_histogram(["a"], [1.0], w)
+    fig = figures.score_histogram(["a"], [1.0], w, x_range=(1, 20), y_range=(None, 0.2))
+    assert list(fig.layout.xaxis.range) == [1, 20] and list(fig.layout.yaxis.range) == [0, 0.2]
+    assert len(fig.data[0].x) > len(auto.data[0].x)                  # scores up to the typed end are drawn
+    assert auto.layout.yaxis.range is None
+    low = figures.score_histogram(["a"], [1.0], w, y_range=(0.1, None))
+    assert low.layout.yaxis.range[0] == 0.1 and low.layout.yaxis.range[1] == pytest.approx(0.525)

@@ -126,7 +126,7 @@ python -m gui            # then open http://127.0.0.1:8050
    trajectory from the initial shares. Where only some points' score chains
    converged, the others' arrows are lighter; a note says when none did. Click
    the simplex or type shares to see the score distributions (overlaid, one per
-   strategy, plus the population), the payoff matrix and the helping rates
+   strategy, plus the population; the x and y ranges can be typed), the payoff matrix and the helping rates
    there; strategies with share 0 are left out of these. Press Play to step
    through the trajectory. Figures download as PNG or SVG from each plot's
    toolbar; "Download data" gives the trajectory, vector field, rest points and
