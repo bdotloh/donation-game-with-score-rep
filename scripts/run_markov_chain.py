@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-"""Run one- or two-strategy score-reputation Markov chains."""
+"""Run one- or two-strategy score-reputation Markov chains.
+
+The chains are run by engine.StableScoreSolver; every step's score
+distributions, class masses and transition rates are saved. The score range
+grows as needed: there is no maximum score.
+"""
 
 import argparse
 import csv
@@ -15,17 +20,16 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 
-SRC_DIR = Path(__file__).resolve().parent / "src"
-sys.path.insert(0, str(SRC_DIR))
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-import compute_stable
-from helpers import parse_bb_string, parse_strategy_string, validate_update_string
+from engine import BinaryStrategy, Population, ScoringNorm, StableScoreSolver, TernaryStrategy
 
 
 RATE_NAMES = {
     2: ["alpha", "beta", "gamma"],
     3: ["alpha", "beta1", "gamma1", "beta2", "gamma2"],
 }
+REP_NAMES = {2: ["bad", "good"], 3: ["bad", "middle", "rich"]}
 COLORS = ["#0072B2", "#E69F00", "#009E73", "#D55E00", "#CC79A7"]
 LINE_STYLES = ["-", "--", "-.", ":", (0, (5, 1, 1, 1, 1, 1))]
 LINE_ALPHAS = [0.65, 0.65, 1.0, 0.65, 1.0]
@@ -35,7 +39,8 @@ def build_parser():
     parser = argparse.ArgumentParser(
         description=(
             "Run a Markov chain until it reaches the tolerance or maxn, then "
-            "save per-step CSV files and plots."
+            "save per-step CSV files and plots. The score range grows as "
+            "needed (there is no maximum score)."
         )
     )
     parser.add_argument("--n-rep-states", type=int, choices=(2, 3), default=2)
@@ -49,7 +54,10 @@ def build_parser():
     )
     parser.add_argument(
         "--strategy-a",
-        help='Strategy A, for example "0,0|g,g". Defaults to all zero actions.',
+        help=(
+            'Strategy A, for example "0,0|g,g": rows are the receiver\'s class, columns '
+            "the donor's, entries 0, g or a help probability. Defaults to all zero actions."
+        ),
     )
     parser.add_argument(
         "--strategy-b",
@@ -72,10 +80,26 @@ def build_parser():
         dest="initial_score_distribution_b",
         help="Initial score probabilities for B; defaults to A's distribution.",
     )
-    parser.add_argument("--rich-threshold", type=int)
-    parser.add_argument("--maxw", type=int, default=100)
-    parser.add_argument("--maxn", type=int, default=100)
-    parser.add_argument("--tolerance", type=float, default=1e-5)
+    parser.add_argument(
+        "--rich-threshold",
+        type=int,
+        metavar="K",
+        help=(
+            "Three states only (required there): the classes are s = 0, "
+            "0 < s < K and s >= K, i.e. the engine's ternary classes with "
+            "tau = K - 1, so K must be at least 2. Omit it (or pass 0) for two states."
+        ),
+    )
+    parser.add_argument(
+        "--maxn", type=int, default=100, help="Maximum number of steps (default 100)."
+    )
+    parser.add_argument("--maxw", type=int, help=argparse.SUPPRESS)
+    parser.add_argument(
+        "--tolerance",
+        type=float,
+        default=1e-5,
+        help="Stop once no score probability changes by more than this in a step.",
+    )
     parser.add_argument(
         "--results-dir",
         type=Path,
@@ -116,14 +140,24 @@ def parse_distribution(text, name):
     return distribution
 
 
-def validate_strategy_string(value, name, n_rep_states):
-    tokens = value.replace("|", ",").split(",")
-    expected = n_rep_states**2
-    if len(tokens) != expected:
-        raise ValueError(f"{name} must contain exactly {expected} actions.")
-    invalid = set(tokens) - {"0", "1", "g"}
-    if invalid:
-        raise ValueError(f"{name} actions must be 0, 1, or g; got {sorted(invalid)}.")
+def parse_norm(cmeetsn, nmeetsc, tau):
+    length = 8 if tau is None else 18
+    for name, code in (("CmeetsN", cmeetsn), ("NmeetsC", nmeetsc)):
+        if len(code) != length:
+            raise ValueError(f"{name} must contain exactly {length} characters.")
+        invalid = set(code) - set("0+-")
+        if invalid:
+            raise ValueError(f"{name} contains invalid characters: {sorted(invalid)}.")
+    return ScoringNorm.from_barcode(f"CN:{cmeetsn} NC:{nmeetsc}", tau=tau)
+
+
+def parse_strategy(text, name, tau):
+    try:
+        if tau is None:
+            return BinaryStrategy.from_name(text)
+        return TernaryStrategy.from_name(text, tau)
+    except ValueError as exc:
+        raise ValueError(f"{name}: {exc}") from exc
 
 
 def validate_args(args):
@@ -133,20 +167,19 @@ def validate_args(args):
     args.nmeetsc = args.nmeetsc or default_update
     args.strategy_a = args.strategy_a or default_strategy(args.n_rep_states)
 
-    validate_update_string(args.cmeetsn, "CmeetsN", args.n_rep_states)
-    validate_update_string(args.nmeetsc, "NmeetsC", args.n_rep_states)
-    validate_strategy_string(args.strategy_a, "strategy-a", args.n_rep_states)
-    if args.strategy_b:
-        validate_strategy_string(args.strategy_b, "strategy-b", args.n_rep_states)
-
     if args.n_rep_states == 2 and args.rich_threshold not in (None, 0):
         raise ValueError("rich-threshold must be omitted or 0 for two reputation states.")
-    if args.n_rep_states == 3 and (
-        args.rich_threshold is None or args.rich_threshold <= 0
-    ):
-        raise ValueError("rich-threshold must be a positive integer for three states.")
-    if args.maxn <= 0 or args.maxw <= 0:
-        raise ValueError("maxn and maxw must be positive integers.")
+    if args.n_rep_states == 3 and (args.rich_threshold is None or args.rich_threshold < 2):
+        raise ValueError(
+            "rich-threshold must be an integer >= 2 for three states "
+            "(K = 1 leaves the middle class empty; use two states instead)."
+        )
+    if args.maxw is not None:
+        raise ValueError(
+            "--maxw is no longer supported: the score range grows as needed, so scores are not capped."
+        )
+    if args.maxn <= 0:
+        raise ValueError("maxn must be a positive integer.")
     if args.tolerance < 0:
         raise ValueError("tolerance must be non-negative.")
     if not 0 <= args.rho_a <= 1:
@@ -165,26 +198,51 @@ def make_run_directory(parent):
             continue
 
 
-def pad_score_distribution(row, maxw):
-    values = np.asarray(row, dtype=float)
-    width = maxw + 1
-    if len(values) > width:
-        raise ValueError(
-            f"Score distribution has {len(values)} bins, exceeding maxw + 1 ({width})."
-        )
-    return np.pad(values, (0, width - len(values)), constant_values=0.0)
+def pad(values, width):
+    values = np.asarray(values, dtype=float)
+    return np.pad(values, (0, width - len(values)))
 
 
-def write_rows(path, header, rows, score_maxw=None):
-    rows = [np.asarray(row, dtype=float).tolist() for row in rows]
-    if score_maxw is not None:
-        rows = [pad_score_distribution(row, score_maxw).tolist() for row in rows]
-        header = [f"score_{index}" for index in range(score_maxw + 1)]
+def class_rates(rates, top):
+    """alpha, beta, gamma (binary) or alpha, beta1, gamma1, beta2, gamma2 per strategy.
+
+    The rates of a class are read at its lowest score; top is the lowest score of the top class.
+    """
+    g, f = rates.g, rates.f
+    columns = [g[:, 1], g[:, 2], f[:, 1]]
+    if top > 1:
+        columns += [g[:, top + 1], f[:, top]]
+    return np.stack(columns, axis=1)
+
+
+def run_chains(norm, population, w_init, args, top):
+    """Per-strategy histories: one dict of (steps, ...) arrays per strategy, and the solver result."""
+    solver = StableScoreSolver(
+        norm,
+        tol=args.tolerance,
+        max_iter=args.maxn,
+        stop_when_transient=False,
+        record_history=True,
+    )
+    result = solver(population, w_init)
+    width = result.w.shape[1]
+    scores = np.array([[pad(row, width) for row in w] for w, _ in result.history])
+    rates = np.array([class_rates(r, top) for _, r in result.history])
+    onehot = np.eye(norm.partition.n_classes)[norm.partition.classify(np.arange(width))]
+    reps = scores @ onehot
+    histories = [
+        {"score_history": scores[:, i], "trans_history": rates[:, i], "rep_history": reps[:, i]}
+        for i in range(population.n)
+    ]
+    return histories, result
+
+
+def write_rows(path, header, rows):
     with path.open("w", newline="") as handle:
         writer = csv.writer(handle)
         writer.writerow(header)
         for row in rows:
-            writer.writerow(row)
+            writer.writerow(np.asarray(row, dtype=float).tolist())
 
 
 def style_axes(ax):
@@ -216,16 +274,16 @@ def save_line_plot(path, rows, labels, title, ylabel, selected_indices=None):
     plt.close(fig)
 
 
-def save_score_snapshots(figures_dir, rows, suffix, maxw):
+def save_score_snapshots(figures_dir, rows, suffix):
+    width = rows.shape[1]
     snapshot_indices = np.unique(
         np.linspace(0, len(rows) - 1, min(5, len(rows)), dtype=int)
     )
     for index in snapshot_indices:
-        values = pad_score_distribution(rows[index], maxw)
         fig, ax = plt.subplots(figsize=(9, 5.5))
         ax.bar(
-            np.arange(maxw + 1),
-            values,
+            np.arange(width),
+            rows[index],
             color=COLORS[0],
             edgecolor="black",
             linewidth=0.4,
@@ -235,7 +293,7 @@ def save_score_snapshots(figures_dir, rows, suffix, maxw):
             title=f"Score distribution at timestep {timestep}",
             xlabel="Score",
             ylabel="Probability",
-            xlim=(-0.5, maxw + 0.5),
+            xlim=(-0.5, width - 0.5),
         )
         style_axes(ax)
         fig.tight_layout()
@@ -247,81 +305,71 @@ def save_score_snapshots(figures_dir, rows, suffix, maxw):
         plt.close(fig)
 
 
-def save_strategy_results(run_dir, result, n_rep_states, suffix, maxw):
-    write_rows(
-        run_dir / f"evo_trans{suffix}.csv",
-        RATE_NAMES[n_rep_states],
-        result["trans_history"],
-    )
+def save_strategy_results(run_dir, history, n_rep_states, suffix):
+    rate_names = RATE_NAMES[n_rep_states]
+    rep_names = REP_NAMES[n_rep_states]
+    scores = history["score_history"]
+    write_rows(run_dir / f"evo_trans{suffix}.csv", rate_names, history["trans_history"])
     write_rows(
         run_dir / f"score_trans{suffix}.csv",
-        [],
-        result["score_history"],
-        score_maxw=maxw,
+        [f"score_{index}" for index in range(scores.shape[1])],
+        scores,
     )
-    rep_names = ["bad", "good"] if n_rep_states == 2 else ["bad", "middle", "rich"]
-    write_rows(
-        run_dir / f"rep_trans{suffix}.csv",
-        rep_names,
-        result["rep_history"],
-    )
+    write_rows(run_dir / f"rep_trans{suffix}.csv", rep_names, history["rep_history"])
 
     figures_dir = run_dir / "figures"
     figures_dir.mkdir(exist_ok=True)
     save_line_plot(
         figures_dir / f"evo_trans{suffix}.png",
-        result["trans_history"],
-        RATE_NAMES[n_rep_states],
+        history["trans_history"],
+        rate_names,
         "Transition rates over time",
         "Probability",
     )
     rep_indices = [0] if n_rep_states == 2 else [0, 2]
     save_line_plot(
         figures_dir / f"rep_trans{suffix}.png",
-        result["rep_history"],
+        history["rep_history"],
         rep_names,
         "Reputation probabilities over time",
         "Probability",
         rep_indices,
     )
-    save_score_snapshots(figures_dir, result["score_history"], suffix, maxw)
+    save_score_snapshots(figures_dir, scores, suffix)
 
 
 def named_values(names, values):
     return {name: float(value) for name, value in zip(names, values)}
 
 
-def result_snapshot(result, index, n_rep_states, maxw):
+def result_snapshot(history, index, n_rep_states):
     return {
         "timestep": index + 1,
         "transition_probabilities": named_values(
-            RATE_NAMES[n_rep_states], result["trans_history"][index]
+            RATE_NAMES[n_rep_states], history["trans_history"][index]
         ),
-        "rep_distribution": np.asarray(result["rep_history"][index]).tolist(),
-        "score_distribution": pad_score_distribution(
-            result["score_history"][index], maxw
-        ).tolist(),
+        "rep_distribution": history["rep_history"][index].tolist(),
+        "score_distribution": history["score_history"][index].tolist(),
     }
 
 
-def transition_stationary_snapshot(result, n_rep_states, maxw, tolerance):
-    rates = result["trans_history"]
+def transition_stationary_snapshot(history, n_rep_states, tolerance):
+    rates = history["trans_history"]
     for index in range(1, len(rates)):
-        change = np.max(
-            np.abs(np.asarray(rates[index]) - np.asarray(rates[index - 1]))
-        )
-        if change <= tolerance:
-            return result_snapshot(result, index, n_rep_states, maxw)
+        if np.max(np.abs(rates[index] - rates[index - 1])) <= tolerance:
+            return result_snapshot(history, index, n_rep_states)
     return None
 
 
-def strategy_details(result, n_rep_states, maxw, tolerance):
-    final_index = len(result["trans_history"]) - 1
+def strategy_details(history, drifting, n_rep_states, tolerance):
+    final_index = len(history["trans_history"]) - 1
     return {
         "transition_probabilities_stopped_changing": transition_stationary_snapshot(
-            result, n_rep_states, maxw, tolerance
+            history, n_rep_states, tolerance
         ),
-        "final": result_snapshot(result, final_index, n_rep_states, maxw),
+        "final": result_snapshot(history, final_index, n_rep_states),
+        # Up-rate >= down-rate at the top score: no stable distribution, the scores keep rising.
+        "drifting": bool(drifting),
     }
 
 
@@ -334,31 +382,23 @@ def run(args):
         args.initial_score_distribution_b or args.initial_score_distribution_a,
         "initial-score-distribution-b",
     )
-    if args.maxw < max(len(w_a), len(w_b)) - 1:
-        raise ValueError("maxw must be at least the largest initial score.")
 
-    bb_string = f"CmeetsN:{args.cmeetsn} NmeetsC:{args.nmeetsc}"
-    bb = parse_bb_string(bb_string, n_rep_states=args.n_rep_states)
-    strategy_a = parse_strategy_string(args.strategy_a, args.n_rep_states)
-    common = {
-        "maxn": args.maxn,
-        "maxw": args.maxw,
-        "n_rep_states": args.n_rep_states,
-        "rich_threshold": args.rich_threshold,
-        "tolerance": args.tolerance,
-        # Histories are retained in memory so details.json is complete even
-        # when per-iteration CSV files and plots are disabled.
-        "save_results_all_iterations": True,
-        "stop_when_transient": False,
-    }
-
+    tau = args.rich_threshold - 1 if args.n_rep_states == 3 else None
+    norm = parse_norm(args.cmeetsn, args.nmeetsc, tau)
+    strategies = [parse_strategy(args.strategy_a, "strategy-a", tau)]
+    inits = [w_a]
+    rho = [1.0]
     if args.strategy_b:
-        strategy_b = parse_strategy_string(args.strategy_b, args.n_rep_states)
-        results = compute_stable.with_2strategies(
-            bb, strategy_a, strategy_b, w_a, w_b, args.rho_a, **common
-        )
-    else:
-        results = (compute_stable.with_1strategy(bb, strategy_a, w_a, **common),)
+        strategies.append(parse_strategy(args.strategy_b, "strategy-b", tau))
+        inits.append(w_b)
+        rho = [args.rho_a, 1.0 - args.rho_a]
+    population = Population(strategies, rho)
+
+    # Pad with zeros up to the lowest top-class score, so rates.g and rates.f reach every class.
+    top = 1 if tau is None else tau + 1
+    width = max(top + 1, *(len(w) for w in inits))
+    histories, result = run_chains(norm, population, [pad(w, width) for w in inits], args, top)
+    width = result.w.shape[1]
 
     run_dir = make_run_directory(args.results_dir)
     details = {
@@ -370,30 +410,22 @@ def run(args):
             "proportion_strategy_B": 1.0 - args.rho_a if args.strategy_b else 0.0,
             "n_rep_states": args.n_rep_states,
             "rich_threshold": args.rich_threshold,
-            "maxw": args.maxw,
+            "tau": tau,
             "maxn": args.maxn,
             "tolerance": args.tolerance,
             "save_results_all_iterations": args.save_results_all_iterations,
-            "initial_score_distribution_A": pad_score_distribution(
-                w_a, args.maxw
-            ).tolist(),
-            "initial_score_distribution_B": (
-                pad_score_distribution(w_b, args.maxw).tolist()
-                if args.strategy_b
-                else None
-            ),
+            "initial_score_distribution_A": pad(w_a, width).tolist(),
+            "initial_score_distribution_B": pad(w_b, width).tolist() if args.strategy_b else None,
         },
         "results": {
-            "iterations_completed": len(results[0]["score_history"]),
+            "iterations_completed": result.n_iter,
+            "converged": bool(result.converged),
             "strategy_A": strategy_details(
-                results[0], args.n_rep_states, args.maxw, args.tolerance
+                histories[0], result.drifting[0], args.n_rep_states, args.tolerance
             ),
             "strategy_B": (
                 strategy_details(
-                    results[1],
-                    args.n_rep_states,
-                    args.maxw,
-                    args.tolerance,
+                    histories[1], result.drifting[1], args.n_rep_states, args.tolerance
                 )
                 if args.strategy_b
                 else None
@@ -406,8 +438,8 @@ def run(args):
 
     if args.save_results_all_iterations:
         suffixes = ("_A", "_B") if args.strategy_b else ("",)
-        for result, suffix in zip(results, suffixes):
-            save_strategy_results(run_dir, result, args.n_rep_states, suffix, args.maxw)
+        for history, suffix in zip(histories, suffixes):
+            save_strategy_results(run_dir, history, args.n_rep_states, suffix)
     return run_dir
 
 
