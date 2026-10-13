@@ -1,0 +1,228 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[margin=2.5cm]{geometry}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{graphicx}
+\usepackage{array}
+\usepackage{longtable}
+\usepackage[hidelinks]{hyperref}
+
+\setlength{\parindent}{0pt}
+\setlength{\parskip}{0.6em}
+\renewcommand{\arraystretch}{1.25}
+
+\title{Verification of the score-based donation game engine}
+\author{}
+\date{13 October 2026}
+
+\begin{document}
+\maketitle
+
+\section{Summary}
+
+This report lists the checks made on the engine in \texttt{engine/}, the replicator-dynamics GUI in \texttt{gui/} and the scripts that now run on them. The repository state is \texttt{main} at commit \texttt{5194351}, the merge of pull request~1 (\url{https://github.com/bdotloh/donation-game-with-score-rep/pull/1}). The notation is that of the notes \emph{Calculating the Stable Reputation Distribution in Infinite Population Models of Indirect Reciprocity}, which were read in full (pages 1--8).
+
+\begin{center}
+\begin{tabular}{@{}>{\raggedright\arraybackslash}p{4.6cm}>{\raggedright\arraybackslash}p{5.2cm}>{\raggedright\arraybackslash}p{4.8cm}@{}}
+\toprule
+Check & Against & Result \\
+\midrule
+Binary stable scores, payoffs and rates & \texttt{helper\_funcs.jl}, 400 cases & All 400 agree to $10^{-12}$ \\
+Binary ESS & \texttt{helper\_funcs.jl}, 3192 rows (809 ESS) & All 3192 rows agree \\
+ESS sweep script & \texttt{helper\_funcs.jl}, all 1296 CN-only norms, noise 0 and 0.01 & No differences \\
+Defectors against Discriminators & Notes, pages 5--6 & Every number reproduced, including the $1.10\times10^{-5}$ and $7.36\times10^{-5}$ differences \\
+$\phi$-Disc & Notes, pages 7--8 & Rates agree to $6\times10^{-17}$; $\pi_0=0.2555$, $\mathbb{E}[\text{score}]=1.889$; gamma-function solution agrees at every score \\
+Ternary classes and $\phi$-Disc & Independent models (Section~\ref{sec:independent}) & \textbf{See Section~\ref{sec:independent}} \\
+Replicator dynamics and rest points & Closed forms and games with known answers & All pass \\
+Earlier scripts moved onto the engine & Old code and committed results & Agree to rounding, except where the old score cap bound \\
+Portability & Python 3.9 / numpy 1.26 / scipy 1.11 (R\=apoi) and Python 3.13 / numpy 2.5 / scipy 1.18 & Tests pass on both \\
+Test suite & 578 tests (2 browser tests run separately) & All pass \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Two things are worth knowing before reading on. First, the notes contain no ternary section, so the ternary results have no closed form to be compared with; Section~\ref{sec:independent} describes how they were checked instead. Second, the notes print the $\phi$-Disc norm on page~7 as \texttt{CN:000000-+}, which is not a valid norm (it would let a score-0 donor lose a score). The code \texttt{CN:00000-0+} is the one the engine uses and the one that reproduces the notes' numbers.
+
+\section{What was tested}
+
+The engine computes, for a well-mixed population of $n$ strategies, the stable score distribution of each strategy as the stationary distribution of a non-linear birth--death chain (notes, Eqs.~1--6), with transition rates
+\[
+g_j^{(i)} = (1-\epsilon)\,G_j^{(i)} + \epsilon\,\epsilon_\uparrow,\qquad
+f_j^{(i)} = (1-\epsilon)\,F_j^{(i)} + \epsilon\,\epsilon_\downarrow,\qquad
+\epsilon_\uparrow+\epsilon_\downarrow = 1 .
+\]
+Strategies are binary (score 0 or at least 1), ternary with a cut-off $\tau$ (score 0, $1$ to $\tau$, above $\tau$) or $\phi$-Disc (help a receiver with a positive score with probability $j^{-\phi}$, where $j$ is the donor's score); every decision point takes a probability in $[0,1]$. Scoring norms are Frean and Marsland barcodes, binary (8 characters) or ternary (18 characters). Scores have no upper limit; the chains run until they converge or reach a maximum number of steps. On top of this the repository has the replicator dynamics (the score chains restart from the initial distribution at every step), the rest-point finder, the Dash GUI, an ESS sweep for Slurm, and the earlier scripts moved onto the engine.
+
+\section{Binary engine against the Julia code}
+
+The user's Julia code is the reference for everything binary. The script \texttt{make\_reference.jl} runs \texttt{helper\_funcs.jl} and saves its output as tab-separated files in \texttt{tests/reference/}. The \texttt{OrderedCollections} package, which was not available, is replaced by \texttt{Dict} for this.
+
+\textbf{Stable scores.} \texttt{stable\_cases.tsv} holds 200 one-strategy and 200 two-strategy cases, with noise 0 (203 cases), 0.01 (93) and 0.1 (104), and \texttt{maxn} in $\{0, 1, 7, 100, 1000\}$. For each case the engine's final score distributions, payoffs and the three rates $\alpha=g_1$, $\beta=g_j$, $\gamma=f_j$ are compared with Julia's, with an absolute tolerance of $10^{-12}$. All 400 cases agree. Payoffs follow Julia's convention: for one strategy they are computed from the distribution before the last step, for two strategies from the final one.
+
+\textbf{ESS.} \texttt{ess\_sweep.tsv} holds the ESS that \texttt{find\_ESS} finds among the 16 binary strategies for 1596 norms at noise 0 and at noise 0.01 (3192 rows, 809 ESS in total, with $\rho_A=0.99$, \texttt{maxn}~100 and fitness threshold $10^{-5}$). \texttt{tests/reference/compare\_ess.py} compares every row and finds the same ESS lists in all 3192; the test suite checks a fixed random sample of 60 rows.
+
+\textbf{ESS sweep script.} \texttt{scripts/ess\_sweep.py}, which runs the same search for any norm set (and is what runs on R\=apoi), was run on all 1296 CN-only binary norms at noise 0 and 0.01 and gave the same ESS lists as Julia for every norm. The run--resume--merge cycle and the Julia agreement on a small set are part of the test suite.
+
+\section{The notes, pages 1--8}
+
+Pages 1, 3, 5 and 7 were available from the start and the engine's tests were built on them (the rate equations, Eqs.~1--11, and the two worked examples). The even-numbered pages add the numerical comparisons, which are checked here. The initial score distribution is not stated for the example on page~6; $\mathbf{w}_{\text{init}}=(0.5, 0.5)$ reproduces the notes' numbers (other choices change the last digit or two of the differences, e.g.\ $\mathbf{w}_{\text{init}}=(1)$ gives $1.14\times10^{-5}$ and $7.61\times10^{-5}$).
+
+\subsection{Defectors against Discriminators (pages 5--6)}
+
+Settings: \texttt{CN:00000-00 NC:00000000}, $\epsilon=0.1$, $\epsilon_\uparrow=0.4$, $\epsilon_\downarrow=0.6$, $\rho_1=\rho_2=0.5$.
+
+\begin{center}
+\begin{tabular}{@{}>{\raggedright\arraybackslash}p{6.6cm}rrr@{}}
+\toprule
+Quantity & Notes & Closed form & Engine \\
+\midrule
+$\pi_0^{(2)}$ (Discriminators) & $1/3$ & $0.333333$ & $0.33333333$ \\
+$\pi_0^{(1)}$ (Defectors) & $0.754095$ & $0.754095$ & $0.75409483$ \\
+$q(\boldsymbol{\pi}_0)$ & $0.456286$ & $0.456286$ & $0.456285920$ \\
+Mean score, Defectors & $0.326093$ & $0.326093$ & $0.32609316$ \\
+Mean score, Discriminators & $2$ & $2$ & $1.9999999988$ \\
+Largest difference, scores 0--20, Defectors, 2000 steps & $1.10\times10^{-5}$ & & $1.097\times10^{-5}$ \\
+Largest difference, scores 0--20, Discriminators, 2000 steps & $7.36\times10^{-5}$ & & $7.361\times10^{-5}$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The closed form solves $0.1125y^2+0.135y-0.04=0$ and uses $\pi_j^{(i)}=(1-r_i)r_i^j$ with $r_1=0.04/(0.225\,q+0.06)$ and $r_2=2/3$. The engine column is the converged distribution (tolerance $10^{-13}$, 8129 steps) except for the last two rows, which are the 2000-step distribution the notes compare with. Figure~1 shows both distributions and the differences.
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=\textwidth]{figures/defectors_discriminators.png}
+\caption{Defectors and Discriminators (notes, page 6). Left: closed-form stationary probabilities (lines) and the engine after 2000 steps from $(0.5,0.5)$ (circles), scores 0 to 20, log scale. Right: absolute differences; values below $10^{-12}$ are drawn at $10^{-12}$.}
+\end{figure}
+
+\subsection{\texorpdfstring{$\phi$}{phi}-Disc (pages 7--8)}
+
+Settings: \texttt{CN:00000-0+ NC:00000000}, a population made only of $\phi$-Disc players.
+
+\textbf{Rates.} The notes give $G_1=0$, $G_j=\dfrac{1-w_0}{4(j-1)^{\phi}}$ for $j>1$, $F_j=\dfrac{1-w_0}{4}\Bigl(1-\dfrac{1}{j^{\phi}}\Bigr)$ for $j\ge1$, and $g_1=\epsilon\epsilon_\uparrow$. The engine's $g_j$ and $f_j$ were compared with these (and Eqs.~3--4) for $\phi\in\{0, 0.17, 0.5, 1, 2\}$ on a score distribution with support on scores 0 to 6: the largest difference is $5.6\times10^{-17}$. For $\phi=0$ the rates equal those of the Discriminators exactly (difference 0), as the notes say.
+
+\textbf{The case $\phi=1$.} With $\epsilon=0.1$, $\epsilon_\uparrow=0.4$, $\epsilon_\downarrow=0.6$, the notes solve the normalisation equation for $\pi_0$ and give
+\[
+\pi_k=\pi_0\,\frac{\tilde\epsilon_\uparrow}{\tilde\epsilon_\downarrow}\,k\,r^{k-1}\,\frac{\Gamma(k+a)\,\Gamma(1+b)}{\Gamma(1+a)\,\Gamma(k+b)},
+\qquad a=\frac{B}{\tilde\epsilon_\uparrow},\; b=\frac{\tilde\epsilon_\downarrow}{B+\tilde\epsilon_\downarrow},\; r=\frac{\tilde\epsilon_\uparrow}{B+\tilde\epsilon_\downarrow},
+\]
+with $B=(1-\epsilon)(1-\pi_0)/4$, $\tilde\epsilon_\uparrow=\epsilon\epsilon_\uparrow$ and $\tilde\epsilon_\downarrow=\epsilon\epsilon_\downarrow$.
+
+\begin{center}
+\begin{tabular}{@{}>{\raggedright\arraybackslash}p{3.6cm}rr>{\raggedright\arraybackslash}p{5.8cm}@{}}
+\toprule
+Quantity & Notes & Gamma solution & Engine \\
+\midrule
+$\pi_0$ & $0.2555$ & $0.255472$ & $0.25547163$ (converged), $0.255472$ (2000 steps) \\
+$\mathbb{E}[\text{score}]$ & $1.889$ & $1.8886$ & $1.888568$ (converged), $1.8886$ (2000 steps) \\
+Largest $|\pi_k^{\text{engine}}-\pi_k^{\text{analytic}}|$, all scores & & & $2.8\times10^{-13}$ (converged, tolerance $10^{-14}$, 807 steps), $7.8\times10^{-16}$ (2000 steps from score 0, 440 scores) \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=\textwidth]{figures/phi_disc.png}
+\caption{$\phi$-Disc with $\phi=1$ (notes, page 8). Left: the gamma-function solution (line) and the engine after 2000 steps from score 0 (circles), scores 0 to 30, log scale. Right: absolute differences; values below $10^{-17}$ are drawn at $10^{-17}$.}
+\end{figure}
+
+Figure~2 shows the distribution and the differences.
+
+\subsection{The norm printed on page 7}
+
+The barcode lists the 8 entries in the order (needy player's class, whether the donor helped, donor's class). \texttt{CN:00000-00} has its minus sign at (positive, declined, positive): a donor with a positive score loses one when she does not help a needy player with a positive score, which is the norm of page 5. The $\phi$-Disc norm adds a plus at (positive, helped, positive), giving \texttt{CN:00000-0+}. The printed \texttt{CN:000000-+} would put the minus at (positive, helped, score-0 donor), which both contradicts the sentence next to it and is not a legal norm (a score-0 player cannot lose a score; the engine rejects it).
+
+\section{Ternary classes and \texorpdfstring{$\phi$}{phi}-Disc beyond the notes}
+\label{sec:independent}
+
+\subsection{Checks that were already in the suite}
+
+\begin{itemize}
+\item \emph{Lifted binary norms and strategies.} A ternary norm and ternary strategies that ignore the split at $\tau$ must give exactly the binary results. This is tested for $\tau\in\{1,2,5\}$ on a set of binary norms (\texttt{test\_ternary\_that\_\allowbreak ignores\_tau\_matches\_binary}), and an ESS sweep of the binary CN-only norms lifted to ternary agreed with the binary sweep, with no differences.
+\item \emph{A ternary strategy does use $\tau$:} a strategy that treats scores $1..\tau$ differently from scores above $\tau$ gives a different answer when $\tau$ moves (\texttt{test\_ternary\_\allowbreak strategy\_uses\_tau}).
+\item \emph{Probabilities.} Rates and payoffs are linear in each help probability; probability is conserved by every step; the stationary distribution satisfies detailed balance (Eqs.~5--6); chains whose up-rate at the top score is at least the down-rate are flagged as not converged.
+\end{itemize}
+
+\subsection{Independent verification}
+
+\textbf{[Results of the independent checks are being added to this section.]}
+
+\section{Replicator dynamics, rest points and the GUI}
+
+There is no external reference for the replicator dynamics, so they are tested against closed forms and against games whose answers are known.
+
+\begin{itemize}
+\item \texttt{tests/test\_replicator.py} (7 tests): the payoff matrix reproduces payoffs; Cooperators against Defectors follows the analytic solution; restarting the chains each step matches warm-starting when the scores settle; slow and fast time scales approach the quasi-static limit; the restart keeps the score range bounded; extinct strategies stay extinct and rest points stop the run; the role factor scales the interaction rates.
+\item \texttt{tests/test\_simplex.py} (19 tests): the simplex grid; rest points and their stability for the prisoner's dilemma, hawk--dove, two- and three-strategy coordination games and rock--paper--scissors (stable and unstable versions); rest points of the engine's own payoffs against the invasion fitness; the awkward cases (an interior rest point close to an edge, segments of rest points, a zero eigenvalue, an eigenvalue close to the boundary, an edge point next to a vertex); parallel evaluation against serial.
+\item \texttt{tests/test\_gui\_logic.py} (47 tests): parsing and validation of every input, building strategies and norms, settings files, presets, and which strategies are shown at a given point of the simplex.
+\item Two browser tests (Chromium through Playwright, run with \texttt{-m e2e}) click through all three pages: choose presets, type a ternary strategy, fill in shares, scores, norm and noise, run, click the simplex, enter a point on the boundary (the absent strategy leaves the table, histogram and matrices), play the trajectory and download the data. A second test loads a settings file for two strategies. These were last run before the migration commits, which do not touch the GUI.
+\end{itemize}
+
+Reviews during development found and fixed: the order of the ternary strategy grid, a broken state when toggling between binary and ternary norms, missing validation of settings files, infinite or NaN inputs, a cap on the initial score, the name of a preset, thread-safety of the rate caches, round-off giving slightly negative rates, and several rest-point cases.
+
+\section{The earlier scripts on the engine}
+
+The old code in \texttt{src/} is deleted; the scripts that used it now run on the engine. For each, the old script was run on the same inputs as the new one, and the new one was compared with the results already committed in the repository. One difference is deliberate: the old code capped scores at \texttt{maxw} (mass at the cap could only move down), and the engine has no cap. Where the cap did not bind the two agree to rounding; where it did, the rates and class masses still agree in the committed runs while the score distributions now continue above \texttt{maxw}. \texttt{--maxw} is rejected.
+
+\begin{longtable}{@{}>{\raggedright\arraybackslash}p{2.9cm}>{\raggedright\arraybackslash}p{12.1cm}@{}}
+\toprule
+Script & Comparison \\
+\midrule
+\endhead
+\midrule
+Markov chain runner & \texttt{scripts/\allowbreak run\_markov\_chain.py} (was \texttt{run\_markov\_chain.py}). 20 argument sets (binary and three-state, one and two strategies, drifting and stable chains, three with a small \texttt{maxw}). Without a binding cap, rates differ by at most $3.6\times10^{-16}$, class masses by $1.4\times10^{-15}$, score distributions by $1.1\times10^{-15}$, and step counts are identical. 1800 random norms, strategies, shares and initial distributions: every step agrees to $1.6\times10^{-14}$. The seven committed run directories agree to $1.4\times10^{-14}$ once scores from 100 up are added together. With a small \texttt{maxw} (10 to 15) the old cap changes the results: in one three-state case the rates differ by up to 0.012 and the class masses by up to 0.048, and in a binary case the old chain stopped after 132 steps because everything piled up at the cap, while the engine runs on and flags the chain as drifting. \\
+Parallel ESS sweep & \texttt{experiments/ESS/\allowbreak find\_ESS\_parellel.py}. All 1296 CN-only norms: the old and new ESS lists are identical, the old code reproduces the committed CSV (333 rows, differences $\le 1.1\times10^{-16}$), the port reproduces it to $10^{-15}$, and all agree with Julia on 1296 of 1296 norms. The ternary path agrees with the old code in 64 of 64 cases (differences $\le10^{-15}$). The old code computed two-strategy payoffs from the distribution before the last step and the engine, like Julia, uses the final one; this reorders only near-ties (the largest gap is $2\times10^{-9}$) and changes no ESS. \\
+Zeroness experiments & \texttt{experiments/\allowbreak verify-zeroness-one-strategy/}. All 20736 chains (1296 norms, 16 strategies): the same group of initial rates for every chain; initial rates identical, final rates within $1.1\times10^{-15}$, final share of score 0 within $4.3\times10^{-15}$; the number of tracked scores is the same in 10944 chains and larger in the 9792 chains where the old cap bound. The limit-check script (which keeps its own chain capped at \texttt{maxw}, since its claims are about that cap) reproduces the committed 20736-row table within $1.1\times10^{-13}$ and the condition summary within $9\times10^{-16}$; its rates agree with the old rate function to $1.4\times10^{-17}$ over all chains at 11 class masses. \\
+\bottomrule
+\end{longtable}
+
+\section{Portability}
+
+The ESS sweep is meant for R\=apoi, whose Python module is 3.9.5. The engine and the sweep were run on Python 3.9 with numpy 1.26 and scipy 1.11 (517 engine tests and the sweep tests pass there). The full suite, including the GUI logic, passes on Python 3.13.16 with numpy 2.5.3, scipy 1.18.1, dash 4.4.1 and plotly 7.1.0.
+
+\section{Test inventory}
+
+\texttt{python -m pytest} runs 578 tests, all passing; two browser tests are deselected by default.
+
+\begin{center}
+\begin{tabular}{@{}lrl@{}}
+\toprule
+File & Tests & Covers \\
+\midrule
+\texttt{test\_against\_julia.py} & 460 & 400 stable-score cases, 60 sampled ESS rows \\
+\texttt{test\_gui\_logic.py} & 47 & GUI parsing, validation, settings, presets \\
+\texttt{test\_engine.py} & 31 & norms, strategies, closed forms, ternary, invariants \\
+\texttt{test\_simplex.py} & 19 & grid, rest points, stability \\
+\texttt{test\_replicator.py} & 7 & dynamics, restart, role factor \\
+\texttt{test\_ess\_sweep.py} & 6 & norm sets, Slurm tasks, resume, merge, Julia agreement \\
+\texttt{test\_experiments.py} & 4 & ESS and zeroness scripts against committed results \\
+\texttt{test\_run\_markov\_chain.py} & 4 & saved rates drive the saved score histories \\
+\midrule
+Total & 578 & \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\section{What has not been verified}
+
+\begin{itemize}
+\item The notes have no ternary result and give a closed form for $\phi$-Disc only at $\phi=1$. For other $\phi$ the engine agrees with the rates in the notes, but no stationary distribution has been compared with a closed form.
+\item The role factor $q(1-q)$ is tested against its definition and by scaling, but Julia only ever uses $q=1/2$.
+\item The replicator dynamics, the rest-point classification and the GUI have no reference implementation; they rest on the closed forms and games above.
+\item Chains with no stable distribution (for example the money norm with $\epsilon_\uparrow=\epsilon_\downarrow$) are reported after a fixed number of steps, so their values depend on the initial distribution and the number of steps.
+\item The Slurm scripts in \texttt{scripts/raapoi/} have been tested locally, with the Slurm environment variables set by hand, but have not been run on R\=apoi itself.
+\end{itemize}
+
+\section{Reproducing the checks}
+
+\begin{verbatim}
+python -m pytest                          # 578 tests
+python -m pytest -m e2e                   # browser tests (needs playwright)
+python tests/reference/compare_ess.py     # every ESS row against Julia
+PYTHONPATH=. python docs/verification/make_figures.py   # the two figures
+\end{verbatim}
+
+\end{document}
