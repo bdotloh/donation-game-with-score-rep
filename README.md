@@ -72,6 +72,7 @@ individual can help with probability q (1/4 for q = 1/2, as in `helper_funcs.jl`
 ```python
 solver = StableScoreSolver(norm, Noise(eps=0.1, eps_up=0.2, eps_down=0.4), max_iter=1000)
 dynamics = ReplicatorDynamics(solver, Payoffs(benefit=2, cost=1), dt=0.1)
+# For runs of a fixed length: StableScoreSolver(..., max_iter=2000, force_max_iter=True, tail_tol=1e-15)
 trajectory = dynamics.run([PhiDisc(1), Defectors()], rho=[0.9, 0.1], w_init=[0.5, 0.5], n_steps=500)
 
 trajectory.rho               # (T, n) strategy frequencies over time
@@ -97,30 +98,42 @@ pip install -r requirements.txt
 python -m gui            # then open http://127.0.0.1:8050
 ```
 
-1. **Strategies**: pick binary, ternary or φ-Disc (or a preset), fill in p(help)
-   for each decision point and add it; the 3D plot shows p(help) over receiver
-   and donor scores. Choose 2 or 3.
+1. **Strategies**: pick binary, ternary or φ-Disc, or a preset (Defectors,
+   Cooperators, AllD-Disc, Disc-Disc), fill in p(help) for each decision point
+   and add it; the 3D plot shows p(help) over receiver and donor scores. Choose
+   2 or 3. They are labelled S1, S2, S3 in that order.
 2. **Parameters**: initial shares (fractions or percentages, e.g. 33.33 three
    times), initial score distribution, scoring norm (binary or ternary, one
-   dropdown per case, or paste a barcode), noise ε, ε↑, ε↓ (ε↑ + ε↓ = 1), the
-   probability q of being able to help, benefit and cost. Settings can be saved
-   and loaded as JSON. The default noise has ε↑ < ε↓ so that scores settle; with
-   ε↑ = ε↓ (helper_funcs.jl's NOISE_VAL) many populations have no stable score
-   distribution.
-3. **Results**: the simplex (a line for 2 strategies, a triangle for 3) with
-   arrows coloured and sized by speed, rest points (black stable, white
-   unstable, gray saddle) and the trajectory from the initial shares. Lighter
-   arrows mark points where the score chains didn't converge. Click the
-   simplex or type shares to see the score distributions, payoffs and helping
-   rates there; press Play to step through the trajectory. Figures download as
-   PNG or SVG from each plot's toolbar; "Download data" gives the trajectory,
-   vector field, rest points and selected point as CSV/JSON.
+   dropdown per case, a preset, or paste a barcode), noise ε, ε↑, ε↓ (ε↑ + ε↓ = 1),
+   the probability q of being able to help, benefit and cost. Under Advanced: the
+   step size and number of steps of the replicator equation, the number of score
+   iterations, the arrow grid, and whether every score chain runs for all its
+   iterations. Defaults: ε = 0.1, ε↑ = ε↓ = 0.5, 2000 score iterations, all of
+   them run. With ε↑ = ε↓ many populations have no stable score distribution, so
+   values are those after the 2000 iterations. Settings can be saved and loaded
+   as JSON.
+3. **Results**: the simplex (a line for 2 strategies, a triangle for 3) with a
+   dense grid of arrows coloured and sized by speed, flow lines through the whole
+   simplex, rest points (black stable, white unstable, gray saddle) and the
+   trajectory from the initial shares. Where only some points' score chains
+   converged, the others' arrows are lighter; a note says when none did. Click
+   the simplex or type shares to see the score distributions (overlaid, one per
+   strategy, plus the population), the payoff matrix and the helping rates
+   there; strategies with share 0 are left out of these. Press Play to step
+   through the trajectory. Figures download as PNG or SVG from each plot's
+   toolbar; "Download data" gives the trajectory, vector field, rest points and
+   selected point as CSV/JSON.
+
+`examples/` has settings files (load them on the first page) and phase
+portraits for Defectors / AllD-Disc / ternary (τ = 5) and Defectors /
+AllD-Disc / φ-Disc (φ = 0.17) under the money norm.
 
 ## Tests
 
 ```
-pip install numpy pytest
-python -m pytest
+pip install -r requirements.txt pytest
+python -m pytest                 # engine, GUI logic
+python -m pytest -m e2e          # clicks through the GUI in a browser (needs playwright)
 ```
 
 `tests/test_against_julia.py` checks the engine against outputs of
@@ -128,6 +141,8 @@ python -m pytest
 `tests/reference/make_reference.jl` regenerates them, and
 `tests/reference/compare_ess.py` checks every ESS row (the test suite checks a sample).
 `tests/test_engine.py` checks the closed forms in the notes (Defectors vs
-Discriminators, a population of 1-Disc) and the ternary and probabilistic cases.
+Discriminators, a population of 1-Disc) and the ternary and probabilistic cases;
+`tests/test_simplex.py` checks rest points and their stability against games
+with known answers. `benchmarks/bench_solver.py` times the score solver.
 
 The older code in `src/` and `experiments/` is unchanged for now.
