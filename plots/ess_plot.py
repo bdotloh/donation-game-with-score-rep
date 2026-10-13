@@ -98,6 +98,8 @@ def prepare(rows):
     """Sorted rows and the arrays the figure is drawn from."""
     if not rows:
         raise ValueError("There are no ESS rows to plot.")
+    if not all(np.isfinite(r.cooperation) for r in rows):
+        raise ValueError("A cooperation level is not a number.")
     rows = sorted(rows, key=lambda r: (r.cooperation, r.strategy.name, r.norm.barcode))
     n = rows[0].norm.partition.n_classes
     if any(r.norm.partition.n_classes != n for r in rows):

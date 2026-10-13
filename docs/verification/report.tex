@@ -39,7 +39,7 @@ Ternary classes and $\phi$-Disc & Independent models (Section~\ref{sec:independe
 Replicator dynamics and rest points & Closed forms and games with known answers & All pass \\
 Earlier scripts moved onto the engine & Old code and committed results & Agree to rounding, except where the old score cap bound \\
 Portability & Python 3.9 / numpy 1.26 / scipy 1.11 (R\=apoi) and Python 3.13 / numpy 2.5 / scipy 1.18 & Tests pass on both \\
-Test suite & 578 tests (2 browser tests run separately) & All pass \\
+Test suite & 613 tests (2 browser tests run separately) & All pass \\
 \bottomrule
 \end{tabular}
 \end{center}
@@ -185,7 +185,7 @@ The ESS sweep is meant for R\=apoi, whose Python module is 3.9.5. The engine and
 
 \section{Test inventory}
 
-\texttt{python -m pytest} runs 578 tests, all passing; two browser tests are deselected by default.
+\texttt{python -m pytest} runs 613 tests, all passing; two browser tests are deselected by default.
 
 \begin{center}
 \begin{tabular}{@{}lrl@{}}
@@ -193,15 +193,17 @@ The ESS sweep is meant for R\=apoi, whose Python module is 3.9.5. The engine and
 File & Tests & Covers \\
 \midrule
 \texttt{test\_against\_julia.py} & 460 & 400 stable-score cases, 60 sampled ESS rows \\
-\texttt{test\_gui\_logic.py} & 47 & GUI parsing, validation, settings, presets \\
+\texttt{test\_gui\_logic.py} & 50 & GUI parsing, validation, settings, presets \\
 \texttt{test\_engine.py} & 31 & norms, strategies, closed forms, ternary, invariants \\
 \texttt{test\_simplex.py} & 19 & grid, rest points, stability \\
 \texttt{test\_replicator.py} & 7 & dynamics, restart, role factor \\
 \texttt{test\_ess\_sweep.py} & 6 & norm sets, Slurm tasks, resume, merge, Julia agreement \\
 \texttt{test\_experiments.py} & 4 & ESS and zeroness scripts against committed results \\
 \texttt{test\_run\_markov\_chain.py} & 4 & saved rates drive the saved score histories \\
+\texttt{test\_known\_norms.py} & 12 & Leading Eight structure and cooperative ESS \\
+\texttt{test\_plots.py} & 20 & ESS figure and its readers \\
 \midrule
-Total & 578 & \\
+Total & 613 & \\
 \bottomrule
 \end{tabular}
 \end{center}
@@ -219,7 +221,7 @@ Total & 578 & \\
 \section{Reproducing the checks}
 
 \begin{verbatim}
-python -m pytest                          # 578 tests
+python -m pytest                          # 613 tests
 python -m pytest -m e2e                   # browser tests (needs playwright)
 python tests/reference/compare_ess.py     # every ESS row against Julia
 PYTHONPATH=. python docs/verification/make_figures.py   # the two figures

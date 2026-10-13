@@ -12,6 +12,7 @@ The cooperation level is the fitness divided by benefit - cost, the most a playe
 
 import csv
 import json
+import math
 import re
 from dataclasses import dataclass
 from pathlib import Path
@@ -44,12 +45,24 @@ def read_sweep(path, tau=None):
     rows = []
     for file in files:
         with file.open(newline="") as handle:
-            for record in csv.DictReader(handle):
+            reader = csv.DictReader(handle)
+            missing = {"norm", "ess", "fitness"} - set(reader.fieldnames or [])
+            if missing:
+                raise ValueError(f"{file} has no column {', '.join(sorted(missing))}; is it from ess_sweep.py?")
+            for record in reader:
                 barcode = record["norm"]
+                row_tau = tau
+                if (suffix := re.search(r" \(tau=(\d+)\)$", barcode)):     # ternary norms are written with their tau
+                    barcode, row_tau = barcode[:suffix.start()], tau if tau is not None else int(suffix.group(1))
                 ternary = len(barcode.split()[0].split(":")[1]) == 18
-                norm = ScoringNorm.from_barcode(barcode, tau=tau if ternary else None)
-                strategy = strategy_from_name(record["ess"], tau=tau)
-                rows.append(EssRow(norm, strategy, float(record["fitness"]) / scale))
+                norm = ScoringNorm.from_barcode(barcode, tau=row_tau if ternary else None)
+                strategy = strategy_from_name(record["ess"], tau=row_tau)
+                fitness = float(record["fitness"])
+                if not math.isfinite(fitness):
+                    raise ValueError(f"The fitness of {record['norm']} / {record['ess']} is {record['fitness']}.")
+                rows.append(EssRow(norm, strategy, fitness / scale))
+    if not rows:
+        raise ValueError(f"{', '.join(map(str, files))} has no ESS rows.")
     return rows
 
 

@@ -61,7 +61,7 @@ button.secondary:hover { border-color: var(--accent); }
 button.link { background: none; color: var(--accent); padding: 4px 6px; }
 button:disabled { cursor: not-allowed; }
 
-.actions { display: flex; align-items: center; justify-content: flex-end; gap: 12px; margin-top: 8px; }
+.actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 12px; margin-top: 8px; }
 .actions .status { margin-right: auto; }
 .title-row { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; }
 .toolbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
@@ -106,5 +106,5 @@ table.summary { width: 100%; }
 .chip { color: white; font-weight: 600; font-size: 12px; border-radius: 10px; padding: 1px 8px; }
 table.pgrid td { min-width: 58px; border-radius: 4px; font-variant-numeric: tabular-nums; }
 table.pgrid th { font-size: 12px; }
-.strategy-card .mini { height: 170px; }
+.strategy-card .mini { height: 200px; }
 .results-note { align-self: center; }

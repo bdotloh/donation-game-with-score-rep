@@ -41,7 +41,12 @@ def build_parser():
 
 def main(argv=None):
     args = build_parser().parse_args(argv)
-    rows = read_paper_data(args.results) if args.paper_data else read_sweep(args.results, tau=args.tau)
+    if args.max_rows is not None and args.max_rows < 1:
+        sys.exit("--max-rows must be at least 1.")
+    try:
+        rows = read_paper_data(args.results) if args.paper_data else read_sweep(args.results, tau=args.tau)
+    except (ValueError, FileNotFoundError) as error:
+        sys.exit(str(error))
     total = len(rows)
     rows = [r for r in rows if r.cooperation >= args.threshold]
     if not rows:
@@ -49,7 +54,7 @@ def main(argv=None):
     if args.max_rows and len(rows) > args.max_rows:
         step = len(rows) / args.max_rows
         rows = sorted(rows, key=lambda r: (r.cooperation, r.strategy.name, r.norm.barcode))
-        rows = [rows[int(k * step)] for k in range(args.max_rows)]
+        rows = [rows[min(int((k + 0.5) * step), len(rows) - 1)] for k in range(args.max_rows)]
     print(f"{len(rows)} ESS rows (of {total}).")
     fig = ess_figure(rows, title=args.title, show_cons=args.show_cons, show_strategies=True if args.show_strategies else None,
                      show_bb_labels=args.show_bb_labels, show_legend=not args.no_legend)

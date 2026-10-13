@@ -229,3 +229,41 @@ def test_command_line(tmp_path):
     assert (tmp_path / "fig.png").stat().st_size > 1000 and (tmp_path / "fig.pdf").stat().st_size > 1000
     with pytest.raises(SystemExit):
         plot_ess.main([str(tmp_path / "sweep"), "--threshold", "2"])
+
+
+def test_read_sweep_ternary_in_the_format_ess_sweep_writes(tmp_path):
+    # ess_sweep.py writes ternary norms with their tau after the barcode
+    named = LEADING_EIGHT[5]
+    barcode = f"{named.norm(tau=3).barcode} (tau=3)"
+    write_sweep(tmp_path, [(barcode, "0,0,0|0,0,0|0,g,g (tau=3)", 0.9)], {"benefit": 2.0, "cost": 1.0})   # no tau in config
+    (r,) = read_sweep(tmp_path)
+    assert r.norm.is_ternary and r.norm.partition.tau == 3 and r.cooperation == pytest.approx(0.9)
+
+
+def test_wide_cells_are_the_actions_taken():
+    import plots.ess_plot as f
+
+    fig = f.ess_figure([row("00000000", "0,0|0,g", 0.5)])
+    collection = next(c for c in fig.axes[0].collections)
+    widths = [path.vertices[1][0] - path.vertices[0][0] for path in collection.get_paths()]
+    # "0,0|0,g": only (receiver with a score, donor with a score) helps: cell 7 (gives) and cells 0, 1, 4 (decline)
+    wide = {k for k, w in enumerate(widths) if w > 0.5}
+    assert wide == {0, 1, 4, 7}
+    assert widths[7] == pytest.approx(f.WIDE) and widths[6] == pytest.approx(f.NARROW)
+
+
+def test_bad_input_is_reported(tmp_path):
+    with pytest.raises(ValueError, match="not a number"):
+        prepare([row("00000000", "0,0|0,0", float("nan"))])
+    write_sweep(tmp_path / "empty", [])
+    with pytest.raises(ValueError, match="no ESS rows"):
+        read_sweep(tmp_path / "empty")
+    (tmp_path / "nocol").mkdir()
+    (tmp_path / "nocol" / "ess.csv").write_text("norm,ess\nCN:00000000 NC:00000000,0\n")
+    with pytest.raises(ValueError, match="fitness"):
+        read_sweep(tmp_path / "nocol")
+    plot_ess = load_script()
+    with pytest.raises(SystemExit):
+        plot_ess.main([str(tmp_path / "nocol")])
+    with pytest.raises(SystemExit):
+        plot_ess.main([str(tmp_path / "empty"), "--max-rows", "0"])
