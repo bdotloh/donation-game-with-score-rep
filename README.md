@@ -118,7 +118,9 @@ python -m gui            # then open http://127.0.0.1:8050
    them run. With ε↑ = ε↓ many populations have no stable score distribution, so
    values are those after the 2000 iterations. Settings can be saved and loaded
    as JSON.
-3. **Results**: the simplex (a line for 2 strategies, a triangle for 3) with a
+3. **Results**: a card shows the strategies as S1, S2, S3 in the colours of the plots, with their
+   decision tables (p(help) for each class of receiver and donor; φ-Disc by donor score), their
+   initial shares and, if ticked, their p(help) surfaces. Then the simplex (a line for 2 strategies, a triangle for 3) with a
    dense grid of arrows coloured and sized by speed, flow lines through the whole
    simplex, rest points (black stable, white unstable, gray saddle) and the
    trajectory from the initial shares. Where only some points' score chains
@@ -129,6 +131,10 @@ python -m gui            # then open http://127.0.0.1:8050
    through the trajectory. Figures download as PNG or SVG from each plot's
    toolbar; "Download data" gives the trajectory, vector field, rest points and
    selected point as CSV/JSON.
+
+The steps at the top are links, so you can move between the pages freely. From Parameters,
+"Current results →" goes back to the results of the last run without running it again (a
+note says if the settings have been changed since); Run starts a new one.
 
 `examples/` has settings files (load them on the first page) and phase
 portraits for Defectors / AllD-Disc / ternary (τ = 5) and Defectors /

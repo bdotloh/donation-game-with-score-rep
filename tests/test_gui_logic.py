@@ -246,3 +246,72 @@ def test_absent_strategies_are_left_out():
     bars = [t for t in fig.data if t.type == "bar"]
     assert [b.name for b in bars] == ["S1 · A", "S3 · C"]
     assert bars[1].marker.color == figures.COLORS[2]
+
+
+def _values(experiment):
+    """The parameters page's inputs, in FORM order after the strategies, for an experiment."""
+    norm = experiment["norm"]
+    return (["33.33", "33.33", "33.33"], [{"score": 0, "mass": 0.5}, {"score": 1, "mass": 0.5}], norm["type"],
+            norm["tau"], list(norm["CN"]), list(norm["NC"]), "0.1", "0.4", "0.6", "0.5", "2", "1", "0.5", "10", "200",
+            "1e-6", "4")
+
+
+def _text(component):
+    """All the text in a Dash component tree."""
+    if isinstance(component, (list, tuple)):
+        return " ".join(_text(c) for c in component)
+    children = getattr(component, "children", component)
+    return _text(children) if not isinstance(children, str) and children is not None else str(children or "")
+
+
+def test_results_show_the_strategies():
+    from dash import dcc
+
+    from gui.compute import Run
+    from gui.pages.results import strategy_cards
+
+    experiment, _ = _experiment()
+    experiment["strategies"][1] = {"type": "ternary", "name": "Tern", "P": [[0, 0, 0], [0, 1, 0.5], [0, 1, 1]],
+                                   "tau": 2, "phi": None}
+    experiment["norm"] = {"type": "ternary", "tau": 2, "CN": "0" * 18, "NC": "0" * 18}
+    run = Run(experiment)
+    cards = strategy_cards(run)
+    assert len(cards) == 3
+    text = [_text(c) for c in cards]
+    assert [t.split()[0] for t in text] == ["S1", "S2", "S3"]
+    assert "AllD-Disc" in text[0] and "initial share 0.3333" in text[0]
+    assert text[0].count("0.5") == 0 and "score 0" in text[0] and "score ≥1" in text[0]   # the 2x2 decision table
+    assert "score 1–2" in text[1] and "score >2" in text[1] and "0.5" in text[1]           # ternary: labels by class
+    assert "donor score" in text[2] and "p(help)" in text[2]                               # phi-Disc: by donor score
+    assert not any(isinstance(x, dcc.Graph) for c in cards for x in c.children)
+    with_surfaces = strategy_cards(run, surfaces=True)
+    assert all(isinstance(c.children[-1], dcc.Graph) for c in with_surfaces)
+
+
+def test_note_next_to_the_results_button():
+    from gui.compute import Run
+    from gui.pages.parameters import results_note_text
+
+    experiment, _ = _experiment()
+    run = Run(experiment)
+    values = _values(experiment)
+    assert results_note_text(None, experiment["strategies"], *values) == ""
+    assert results_note_text(run, experiment["strategies"], *values) == ""          # the same settings
+    changed = list(values)
+    changed[6] = "0.2"                                                                 # a different noise
+    assert "last run" in results_note_text(run, experiment["strategies"], *changed)
+    changed[6] = "abc"                                                                 # invalid: nothing to say
+    assert results_note_text(run, experiment["strategies"], *changed) == ""
+
+
+def test_the_steps_are_links():
+    from dash import dcc
+
+    from gui.app import STEPS, create_app
+
+    app = create_app()
+    show_page = next(f for f in app.callback_map.values() if "steps.children" in str(f.get("output", "")))
+    steps = show_page["callback"].__wrapped__("/parameters")[1]
+    assert [s.href for s in steps] == [path for path, _ in STEPS]
+    assert all(isinstance(s, dcc.Link) for s in steps)
+    assert [s.className for s in steps] == ["step", "step active", "step"]

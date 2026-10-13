@@ -38,13 +38,17 @@ def layout():
     return html.Div([html.H1("Parameters"), dcc.Store(id="p-scores"), html.Div(id="p-body")])
 
 
-def actions():
+def actions(has_run=False):
+    """Back / save / run, and a way back to the results of the last run (hidden until there is one)."""
     return html.Div(
         [
             html.Button("← Strategies", id="p-back", className="secondary", n_clicks=0),
             html.Button("Save settings", id="p-save", className="secondary", n_clicks=0),
             dcc.Download(id="p-download"),
             html.Div(id="p-run-error", className="status error"),
+            html.Span(id="p-results-note", className="hint results-note"),
+            html.Button("Current results →", id="p-to-results", className="secondary", n_clicks=0,
+                        style={} if has_run else {"display": "none"}),
             html.Button("Run", id="p-run", className="primary", n_clicks=0),
         ],
         className="actions",
@@ -200,14 +204,16 @@ def register(app):
         Input("url", "pathname"),
         State("store-strategies", "data"),
         State("store-params", "data"),
+        State("store-run", "data"),
     )
-    def build(pathname, strategies, params):
+    def build(pathname, strategies, params, run_id):
         if pathname != "/parameters":
             return no_update, no_update
         if not strategies or len(strategies) < 2:
             return html.P(["Choose strategies first. ", dcc.Link("Back to strategies", href="/")]), []
         params = params or defaults(len(strategies))
-        return form(strategies, params) + [actions()], params.get("scores", defaults(2)["scores"])
+        return (form(strategies, params) + [actions(RUNS.get(run_id) is not None)],
+                params.get("scores", defaults(2)["scores"]))
 
     @app.callback(
         Output("store-params", "data", allow_duplicate=True),
@@ -358,6 +364,21 @@ def register(app):
     def back(n_clicks):
         return "/" if n_clicks else no_update
 
+    @app.callback(Output("url", "pathname", allow_duplicate=True), Input("p-to-results", "n_clicks"),
+                  prevent_initial_call=True)
+    def to_results(n_clicks):
+        return "/results" if n_clicks else no_update
+
+    @app.callback(
+        Output("p-results-note", "children"),
+        *[Input(i, p) for i, p in FORM],
+        State("store-strategies", "data"),
+        State("store-run", "data"),
+    )
+    def results_note(*args):
+        strategies, run_id = args[-2:]
+        return results_note_text(RUNS.get(run_id), strategies, *args[:-2])
+
     @app.callback(
         Output("store-run", "data"),
         Output("url", "pathname", allow_duplicate=True),
@@ -390,6 +411,16 @@ def register(app):
         if error:
             return no_update, error
         return dict(content=json.dumps(experiment, indent=2), filename="replicator_settings.json"), ""
+
+
+def results_note_text(run, strategies, *values):
+    """Said next to the button back to the results: whether these settings are the ones that were run."""
+    if run is None or not values[0]:
+        return ""
+    experiment, error = experiment_from_inputs(strategies, *values)
+    if error or experiment == run.experiment:
+        return ""
+    return "The results are from the settings of the last run."
 
 
 def interactions(q, b, c):

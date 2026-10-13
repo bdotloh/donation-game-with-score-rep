@@ -18,7 +18,8 @@ body { margin: 0; background: var(--bg); color: var(--text);
           background: var(--card); border-bottom: 1px solid var(--line); }
 .brand { font-weight: 600; }
 .steps { display: flex; gap: 18px; }
-.step { color: var(--muted); }
+.step { color: var(--muted); text-decoration: none; }
+a.step:hover { color: var(--accent); }
 .step.active { color: var(--accent); font-weight: 600; }
 
 .page { max-width: 1280px; margin: 0 auto; padding: 20px 28px 60px; }
@@ -97,3 +98,13 @@ table.summary { width: 100%; }
 .side hr { border: none; border-top: 1px solid var(--line); margin: 12px 0; }
 .checks label { margin-right: 14px; font-weight: normal; }
 .checks input { margin-right: 4px; }
+
+.strategy-strip { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-top: 8px; }
+@media (max-width: 900px) { .strategy-strip { grid-template-columns: 1fr; } }
+.strategy-card { border: 1px solid var(--line); border-left-width: 4px; border-radius: 8px; padding: 10px 12px; min-width: 0; }
+.strategy-head { display: flex; align-items: center; gap: 8px; margin-bottom: 2px; flex-wrap: wrap; }
+.chip { color: white; font-weight: 600; font-size: 12px; border-radius: 10px; padding: 1px 8px; }
+table.pgrid td { min-width: 58px; border-radius: 4px; font-variant-numeric: tabular-nums; }
+table.pgrid th { font-size: 12px; }
+.strategy-card .mini { height: 170px; }
+.results-note { align-self: center; }
