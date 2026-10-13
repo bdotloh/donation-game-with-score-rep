@@ -60,6 +60,15 @@ def page(server):
         browser.close()
 
 
+def dump_threads():
+    """Print the stacks of all threads (to diagnose a hung computation)."""
+    import sys
+    import traceback
+
+    for tid, frame in sys._current_frames().items():
+        print(f"--- thread {tid}\n" + "".join(traceback.format_stack(frame)[-8:]))
+
+
 def shot(page, name):
     page.screenshot(path=os.path.join(page.shots, f"{name}.png"), full_page=True)
 
@@ -90,6 +99,7 @@ def test_full_flow(page):
         _full_flow(page)
     except Exception:
         shot(page, "failure")
+        dump_threads()
         raise
 
 
@@ -220,4 +230,5 @@ def test_two_strategies_from_settings_file(page, server, tmp_path):
         assert not page.errors, page.errors
     except Exception:
         shot(page, "failure_two")
+        dump_threads()
         raise

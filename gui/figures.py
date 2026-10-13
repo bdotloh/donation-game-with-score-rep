@@ -342,10 +342,11 @@ def _line_figure(names, labels, grid, velocities, converged, rest_points, trajec
 # ---------------------------------------------------------------- scores and matrices
 
 
-def score_histogram(names, rho, w, hidden=(), show_marginal=True, labels=None):
+def score_histogram(names, rho, w, hidden=(), show_marginal=True, labels=None, colors=None):
     """Conditional score distributions w[i] for each strategy (overlaid, semi-transparent), and the
     population's marginal sum_i rho_i w[i]."""
     labels = labels or default_labels(len(names))
+    colors = colors or COLORS
     w = np.asarray(w)
     rho = np.asarray(rho)
     marginal = rho @ w
@@ -362,10 +363,10 @@ def score_histogram(names, rho, w, hidden=(), show_marginal=True, labels=None):
         ymax = max(ymax, w[i, : upper + 1].max())
         label = f"{labels[i]} · {name}"
         fig.add_trace(go.Bar(x=scores[: upper + 1], y=w[i, : upper + 1], name=label, legendgroup=name,
-                             marker=dict(color=COLORS[i], line=dict(color=COLORS[i], width=1.5)), opacity=0.45,
+                             marker=dict(color=colors[i], line=dict(color=colors[i], width=1.5)), opacity=0.45,
                              hovertemplate=f"{labels[i]}<br>score %{{x}}<br>probability %{{y:.4f}}<extra></extra>"))
         fig.add_trace(go.Scatter(x=[mean, mean], y=[0, 1], yaxis="y2", mode="lines", legendgroup=name,
-                                 line=dict(color=COLORS[i], dash="dash", width=2), showlegend=False,
+                                 line=dict(color=colors[i], dash="dash", width=2), showlegend=False,
                                  hovertemplate=f"{labels[i]}: mean score {mean:.3f}<extra></extra>"))
     if show_marginal:
         mean = scores @ marginal

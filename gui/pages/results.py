@@ -184,12 +184,16 @@ def register(app):
         else:
             state = run.point(selection["rho"])
         shown = shown or []
-        hidden = [n for n in run.names if n not in shown]
-        hist = figures.score_histogram(run.names, state["rho"], state["w"], hidden=hidden, labels=run.labels,
+        p = present(state["rho"])                    # strategies with share 0 are left out of these panels
+        names, labels = [run.names[i] for i in p], [run.labels[i] for i in p]
+        hidden = [n for n in names if n not in shown]
+        hist = figures.score_histogram(names, np.asarray(state["rho"])[p], np.asarray(state["w"])[p], hidden=hidden,
+                                       labels=labels, colors=[figures.COLORS[i] for i in p],
                                        show_marginal="population" in shown)
-        payoff = figures.matrix_heatmap(state["payoff_matrix"], run.labels, "Payoff matrix A  (π = Aρ)",
-                                        "strategy", "against", diverging=True)
-        help_ = figures.matrix_heatmap(state["help_matrix"], run.labels, "Helping rates H", "donor", "receiver")
+        payoff = figures.matrix_heatmap(np.asarray(state["payoff_matrix"])[np.ix_(p, p)], labels,
+                                        "Payoff matrix A  (π = Aρ)", "strategy", "against", diverging=True)
+        help_ = figures.matrix_heatmap(np.asarray(state["help_matrix"])[np.ix_(p, p)], labels, "Helping rates H",
+                                       "donor", "receiver")
         time = f"t = {state['time']:g}" if state["time"] is not None else "selected point"
         patch = Patch()
         if run.n == 3:
@@ -197,7 +201,7 @@ def register(app):
             patch["data"][-1]["x"], patch["data"][-1]["y"] = list(x), list(y)
         else:
             patch["data"][-1]["x"], patch["data"][-1]["y"] = [state["rho"][1]], [0]
-        return hist, payoff, help_, summary(run, state), time, patch
+        return hist, payoff, help_, summary(run, state, p), time, patch
 
     @app.callback(
         Output("r-player", "disabled"),
@@ -278,7 +282,12 @@ def click_composition(click):
     return rho if min(rho) >= 0 and sum(rho) > 0 else None
 
 
-def summary(run, state):
+def present(rho, tol=1e-9):
+    """Indices of the strategies with a positive share."""
+    return [i for i, r in enumerate(rho) if r > tol]
+
+
+def summary(run, state, shown=None):
     rho, pi, v, w = state["rho"], state["payoffs"], state["velocity"], state["w"]
     scores = np.arange(w.shape[1])
     header = html.Tr([html.Th(""), html.Th("share"), html.Th("payoff π"), html.Th("dρ/dt"), html.Th("w₀"),
@@ -288,7 +297,7 @@ def summary(run, state):
                  html.Td(f"{rho[i]:.4f}"),
                  html.Td(f"{pi[i]:.4f}"), html.Td(f"{v[i]:+.2g}"), html.Td(f"{w[i, 0]:.4f}"),
                  html.Td(f"{scores @ w[i]:.3f}")])
-        for i, name in enumerate(run.names)
+        for i, name in enumerate(run.names) if shown is None or i in shown
     ]
     rows.append(html.Tr([html.Th("mean"), html.Td(""), html.Td(f"{rho @ pi:.4f}"), html.Td(""), html.Td(""),
                          html.Td("")]))

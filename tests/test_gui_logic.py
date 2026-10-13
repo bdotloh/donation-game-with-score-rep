@@ -233,3 +233,16 @@ def test_flow_lines_follow_the_field():
         else:
             current.append(y)
     assert all(line[-1] >= line[0] for line in lines)   # every line climbs towards the top corner
+
+
+def test_absent_strategies_are_left_out():
+    from gui.pages.results import present
+
+    assert present([0.5, 0.0, 0.5]) == [0, 2]
+    assert present([1.0, 0.0, 0.0]) == [0]
+    w = np.array([[0.5, 0.5], [0.9, 0.1]])
+    fig = figures.score_histogram(["A", "C"], [0.5, 0.5], w, labels=["S1", "S3"],
+                                  colors=[figures.COLORS[0], figures.COLORS[2]])
+    bars = [t for t in fig.data if t.type == "bar"]
+    assert [b.name for b in bars] == ["S1 · A", "S3 · C"]
+    assert bars[1].marker.color == figures.COLORS[2]
