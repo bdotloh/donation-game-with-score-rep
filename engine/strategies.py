@@ -21,6 +21,7 @@ Non-deterministic entries are written as numbers, e.g. "0,0|0.5,1".
 """
 
 from abc import ABC, abstractmethod
+from itertools import product
 
 import numpy as np
 
@@ -137,6 +138,35 @@ def Defectors():
 def Discriminators():
     """Help only when both donor and receiver have a positive score."""
     return BinaryStrategy.from_name("0,0|0,g")
+
+
+def all_binary_strategies():
+    """The 16 deterministic binary strategies, in helper_funcs.jl's order ('0' before 'g')."""
+    return [BinaryStrategy(np.reshape(bits, (2, 2))) for bits in product((0.0, 1.0), repeat=4)]
+
+
+def all_ternary_strategies(tau):
+    """The 512 deterministic ternary strategies with cutoff tau."""
+    return [TernaryStrategy(np.reshape(bits, (3, 3)), tau) for bits in product((0.0, 1.0), repeat=9)]
+
+
+def strategy_from_name(name, tau=None):
+    """A strategy from its name: "a,b|c,d" (binary), "a,b,c|d,e,f|g,h,i" (ternary, needs tau; a trailing
+    " (tau=T)" is also understood) or "phi:0.5" / "phi-Disc(phi=0.5)" (phi-Disc)."""
+    name = name.strip()
+    if name.startswith("phi:"):
+        return PhiDisc(float(name[4:]))
+    if name.startswith("phi-Disc(phi=") and name.endswith(")"):
+        return PhiDisc(float(name[len("phi-Disc(phi="):-1]))
+    if " (tau=" in name and name.endswith(")"):
+        name, tau_text = name[:-1].split(" (tau=")
+        tau = int(tau_text)
+    rows = name.split("|")
+    if len(rows) == 3:
+        if tau is None:
+            raise ValueError(f"The ternary strategy {name!r} needs tau.")
+        return TernaryStrategy.from_name(name, tau)
+    return BinaryStrategy.from_name(name)
 
 
 def parse_table(name, n):

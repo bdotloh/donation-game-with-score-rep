@@ -24,4 +24,7 @@ from .strategies import (
     PhiDisc,
     Strategy,
     TernaryStrategy,
+    all_binary_strategies,
+    all_ternary_strategies,
+    strategy_from_name,
 )
