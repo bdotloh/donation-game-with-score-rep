@@ -181,6 +181,14 @@ def _full_flow(page):
     page.click("#r-show")
     page.wait_for_function(f"document.querySelector('#r-summary').innerText !== {before!r}", timeout=120_000)
     assert "0.6000" in page.inner_text("#r-summary")
+    # On the boundary, the absent strategy leaves the table, histogram and matrices.
+    set_text(page, "input[id*='r-share'] >> nth=0", "0.5")
+    set_text(page, "input[id*='r-share'] >> nth=1", "0.5")
+    set_text(page, "input[id*='r-share'] >> nth=2", "0")
+    page.click("#r-show")
+    page.wait_for_function("!document.querySelector('#r-summary').innerText.includes('S3')", timeout=120_000)
+    assert "S3" not in page.inner_text("#r-payoff") and "S3" not in page.inner_text("#r-hist")
+    shot(page, "3b_boundary")
     before = page.inner_text("#r-summary")
     click_plot(page, "#r-simplex .nsewdrag", 0.5, 0.55)                  # inside the triangle
     page.wait_for_function(f"document.querySelector('#r-summary').innerText !== {before!r}", timeout=120_000)
@@ -222,10 +230,11 @@ def test_two_strategies_from_settings_file(page, server, tmp_path):
         page.click("#p-run")
         page.wait_for_selector("#r-body:not([style*='none'])", timeout=600_000)
         page.wait_for_selector("#r-simplex .main-svg")
+        page.wait_for_function("document.querySelector('#r-time').innerText.startsWith('t =')")
         before = page.inner_text("#r-summary")
         click_plot(page, "#r-simplex .nsewdrag >> nth=-1", 0.3, 0.5)    # the line panel
-        page.wait_for_function(f"document.querySelector('#r-summary').innerText !== {before!r}", timeout=120_000)
-        assert "selected point" in page.inner_text("#r-time")
+        page.wait_for_function("document.querySelector('#r-time').innerText === 'selected point'", timeout=120_000)
+        assert page.inner_text("#r-summary") != before
         shot(page, "5_two_strategies")
         assert not page.errors, page.errors
     except Exception:

@@ -12,7 +12,7 @@ import numpy as np
 from engine import Population
 from engine.simplex import ReplicatorField, find_rest_points, simplex_grid
 
-from . import spec
+from . import figures, spec
 
 
 class Run:
@@ -32,7 +32,7 @@ class Run:
         self.progress = 0.0
         self.message = "Starting…"
         self.error = ""
-        self.grid = self.grid_results = self.rest_points = self.trajectory = None
+        self.grid = self.grid_results = self.rest_points = self.trajectory = self.figure = None
         self._points = {}
 
     # ------------------------------------------------------------ computation
@@ -55,6 +55,11 @@ class Run:
             self.trajectory = self.dynamics.run(self.strategies, self.rho0, self.w_init, n_steps, record_scores=True,
                                                 progress=self._progress(0.65, 1.0, n_steps + 1))
             self._trajectory_matrices()
+            self.message = "Drawing the phase portrait…"
+            self.figure = figures.simplex_figure(
+                self.names, self.grid, [r.velocity for r in self.grid_results],
+                [r.converged for r in self.grid_results], self.rest_point_dicts(),
+                trajectory=self.trajectory.rho, current=self.trajectory.rho[0], labels=self.labels)
             self.state = "done"
             self.progress = 1.0
         except Exception as error:  # shown to the user

@@ -111,9 +111,7 @@ def register(app):
         if run.state == "error":
             return (status(f"The computation failed: {run.error}", False), {"display": "none"}, True) + nothing
         converged = np.array([r.converged for r in run.grid_results])
-        fig = figures.simplex_figure(run.names, run.grid, [r.velocity for r in run.grid_results], converged,
-                                     run.rest_point_dicts(), trajectory=run.trajectory.rho,
-                                     current=run.trajectory.rho[0], labels=run.labels)
+        fig = run.figure                    # drawn once, at the end of the computation
         note = []
         if not converged.any():
             note.append("The score chains don't converge anywhere here (no stable score distribution), so all "

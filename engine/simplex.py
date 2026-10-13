@@ -33,6 +33,7 @@ triangular: its eigenvalues are those within the face (along the edge, first),
 then the invasion fitnesses of the missing strategies (transverse).
 """
 
+import multiprocessing
 import os
 from concurrent.futures import ProcessPoolExecutor, as_completed
 from dataclasses import dataclass
@@ -119,7 +120,8 @@ class ReplicatorField:
             return results
 
         results = [None] * total
-        with ProcessPoolExecutor(min(n_jobs, total), initializer=_set_worker_field, initargs=(self,)) as pool:
+        with ProcessPoolExecutor(min(n_jobs, total), mp_context=_pool_context(), initializer=_set_worker_field,
+                                 initargs=(self,)) as pool:
             futures = {pool.submit(_evaluate_in_worker, rho): index for index, rho in enumerate(points)}
             try:
                 for done, future in enumerate(as_completed(futures), 1):
@@ -133,6 +135,13 @@ class ReplicatorField:
 
 
 _worker_field = None
+
+
+def _pool_context():
+    """Start workers with 'forkserver' where available: forking a process that runs other threads
+    (a web server, say) can deadlock the workers."""
+    methods = multiprocessing.get_all_start_methods()
+    return multiprocessing.get_context("forkserver" if "forkserver" in methods else "spawn")
 
 
 def _set_worker_field(field):

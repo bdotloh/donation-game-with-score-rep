@@ -91,10 +91,11 @@ def from_xy(x, y):
     return np.array([1 - rho2 - rho3, rho2, rho3])
 
 
-def flow_lines(grid, velocities, dsep=0.03, step=0.004, max_steps=2000):
+def flow_lines(grid, velocities, dsep=0.03, step=0.004, max_steps=2000, lookup=400):
     """Evenly spaced flow lines of the velocity field on the triangle, as x and y lists with
-    None between lines. The field is interpolated linearly between the grid points, and a new
-    line stops where it comes within dsep of another one (Jobard and Lefer's method)."""
+    None between lines. The field is interpolated linearly between the grid points (once, onto a
+    fine lookup grid), and a new line stops where it comes within dsep of another one (Jobard and
+    Lefer's method)."""
     from scipy.interpolate import LinearNDInterpolator
 
     x0, y0 = to_xy(grid)
@@ -102,17 +103,27 @@ def flow_lines(grid, velocities, dsep=0.03, step=0.004, max_steps=2000):
     speed_max = np.hypot(vx, vy).max()
     if speed_max == 0:
         return [], []
-    field = LinearNDInterpolator(np.column_stack([x0, y0]), np.column_stack([vx, vy]))
+    xs_, ys_ = np.linspace(0, 1, lookup + 1), np.linspace(0, SQRT3_2, lookup + 1)
+    X, Y = np.meshgrid(xs_, ys_)
+    table = LinearNDInterpolator(np.column_stack([x0, y0]), np.column_stack([vx, vy]))(X, Y)   # NaN outside
+    hx, hy = xs_[1], ys_[1]
 
     def direction(p):
-        v = np.ravel(field(p[0], p[1]))
+        """Bilinear lookup of the unit direction at p (None outside the triangle or where it is ~0)."""
+        fx, fy = p[0] / hx, p[1] / hy
+        i, j = int(fy), int(fx)
+        if not (0 <= i < lookup and 0 <= j < lookup):
+            return None
+        ty, tx = fy - i, fx - j
+        v = ((1 - ty) * ((1 - tx) * table[i, j] + tx * table[i, j + 1])
+             + ty * ((1 - tx) * table[i + 1, j] + tx * table[i + 1, j + 1]))
         speed = np.hypot(v[0], v[1])
         if not np.isfinite(speed) or speed < 1e-4 * speed_max:
             return None
         return v / speed
 
     def inside(p):
-        return from_xy(p[0], p[1]).min() >= -1e-9
+        return p[1] >= -1e-12 and SQRT3_2 * p[0] - 0.5 * p[1] >= -1e-12 and SQRT3_2 * (1 - p[0]) - 0.5 * p[1] >= -1e-12
 
     def cell(p):
         return int(p[0] // dsep), int(p[1] // dsep)
