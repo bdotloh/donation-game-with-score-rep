@@ -30,10 +30,9 @@ def create_app():
     @app.callback(Output("page", "children"), Output("steps", "children"), Input("url", "pathname"))
     def show_page(pathname):
         page = PAGES.get(pathname, strategies)
-        steps = [
-            html.Span(label, className="step active" if path == (pathname if pathname in PAGES else "/") else "step")
-            for path, label in STEPS
-        ]
+        current = pathname if pathname in PAGES else "/"
+        steps = [dcc.Link(label, href=path, className="step active" if path == current else "step")
+                 for path, label in STEPS]
         return page.layout(), steps
 
     for page in PAGES.values():

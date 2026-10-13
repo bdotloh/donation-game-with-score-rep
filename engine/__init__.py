@@ -7,6 +7,7 @@ rates G, F (interactions only) and g, f (with noise eps, eps_up, eps_down).
 """
 
 from .ess import ESSFinder
+from .known_norms import LEADING_EIGHT, MONEY, NamedNorm
 from .noise import Noise
 from .norms import ScoringNorm, all_norms
 from .partitions import PossessionPartition, ScorePartition, TernaryPartition

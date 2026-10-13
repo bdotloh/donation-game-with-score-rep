@@ -7,9 +7,10 @@ import zipfile
 import numpy as np
 from dash import ALL, Input, Output, Patch, State, ctx, dcc, html, no_update
 
-from .. import figures, validation
+from .. import figures, spec, validation
 from ..compute import RUNS
 from ..components import GRAPH_CONFIG, card, field, status
+from .strategies import small_surface
 
 GRAPHS = ["r-simplex", "r-hist", "r-payoff", "r-help"]
 
@@ -47,6 +48,11 @@ def layout():
 
 def results_body():
     return [
+        card("Strategies", [
+            dcc.Checklist(id="r-surfaces", inline=True, className="checks",
+                          options=[{"label": "Show the p(help) surfaces", "value": "on"}], value=[]),
+            html.Div(id="r-strategies", className="strategy-strip"),
+        ]),
         html.Div(
             [
                 card(None, [
@@ -100,7 +106,7 @@ def register(app):
     )
     def poll(_, run_id):
         run = RUNS.get(run_id)
-        nothing = (no_update,) * 7
+        nothing = (no_update,) * 7                      # the outputs after the first three
         if run is None:
             message = html.P(["Nothing has been run yet. ", html.A("Set the parameters", href="/parameters"), "."])
             return (message, {"display": "none"}, True) + nothing
@@ -131,6 +137,19 @@ def register(app):
         selection = {"kind": "frame", "frame": 0}
         return (None, {}, True, fig, " ".join(note), composition, len(run.trajectory.t) - 1, options, values,
                 selection)
+
+    @app.callback(
+        Output("r-strategies", "children"),
+        Input("r-poll", "n_intervals"),
+        Input("r-surfaces", "value"),
+        State("store-run", "data"),
+        State("r-strategies", "children"),
+    )
+    def show_strategies(_, surfaces, run_id, shown):
+        run = RUNS.get(run_id)
+        if run is None or (ctx.triggered_id == "r-poll" and shown):     # drawn once, and again for the checkbox
+            return no_update
+        return strategy_cards(run, surfaces=bool(surfaces))
 
     @app.callback(
         Output("r-selection", "data", allow_duplicate=True),
@@ -278,6 +297,47 @@ def click_composition(click):
     except (TypeError, ValueError):
         return None
     return rho if min(rho) >= 0 and sum(rho) > 0 else None
+
+
+def strategy_cards(run, surfaces=False):
+    """One card per strategy of the run: its label and colour, name, initial share and what it does."""
+    cards = []
+    for i, cfg in enumerate(run.experiment["strategies"]):
+        color = figures.COLORS[i]
+        children = [
+            html.Div([html.Span(run.labels[i], className="chip", style={"background": color}), html.B(cfg["name"])],
+                     className="strategy-head"),
+            html.Div(f"{spec.describe_strategy(cfg)} · initial share {run.rho0[i]:.4g}", className="hint"),
+            strategy_table(cfg),
+        ]
+        if surfaces:
+            children.append(dcc.Graph(figure=small_surface(cfg), config={"displayModeBar": False}, className="mini"))
+        cards.append(html.Div(children, className="strategy-card", style={"borderLeftColor": color}))
+    return cards
+
+
+def strategy_table(cfg):
+    """The decision points of a strategy: p(help) for each class of receiver and donor (phi-Disc: by donor score)."""
+    if cfg["type"] == "phi":
+        scores = [1, 2, 3, 5, 10]
+        table = html.Table(
+            [html.Tr([html.Th("donor score")] + [html.Th(str(j)) for j in scores]),
+             html.Tr([html.Th("p(help)")] + [html.Td(f"{j ** -cfg['phi']:.3g}", style=shade(j ** -cfg["phi"]))
+                                             for j in scores])],
+            className="grid pgrid")
+        return html.Div([table, html.Div("Only helps a receiver with a score, and never when its own score is 0.",
+                                         className="hint")])
+    labels = spec.class_labels(cfg["type"], cfg.get("tau"))
+    header = html.Tr([html.Th("receiver ↓  donor →", className="corner")] + [html.Th(f"score {c}") for c in labels])
+    rows = [html.Tr([html.Th(f"score {labels[r]}")]
+                    + [html.Td(f"{p:g}", style=shade(p)) for p in row])
+            for r, row in enumerate(cfg["P"])]
+    return html.Table([header] + rows, className="grid pgrid")
+
+
+def shade(p):
+    """Cell colour that grows with the probability of helping."""
+    return {"background": f"rgba(47, 95, 167, {0.06 + 0.42 * p:.2f})"}
 
 
 def present(rho, tol=1e-9):

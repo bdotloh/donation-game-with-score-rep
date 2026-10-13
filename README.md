@@ -38,6 +38,12 @@ characters per rule: `ScoringNorm.from_barcode(code, tau=2)`, or lift a binary
 norm with `norm.to_ternary(tau)`. `all_norms(tau=None, use_CN=True, use_NC=True)`
 enumerates every valid norm.
 
+`LEADING_EIGHT` (in `engine/known_norms.py`) holds the Leading Eight norms L1 to L8 as
+barcodes (they change the donor only), each with the ESS strategy that goes with it, and
+`MONEY` the paper's money norm. They are presets in the GUI. A barcode stores changes, so
+they are the two-reputation Leading Eight exactly while scores stay at 0 and 1, which is
+the case without noise.
+
 ## Example
 
 ```python
@@ -112,7 +118,9 @@ python -m gui            # then open http://127.0.0.1:8050
    them run. With ε↑ = ε↓ many populations have no stable score distribution, so
    values are those after the 2000 iterations. Settings can be saved and loaded
    as JSON.
-3. **Results**: the simplex (a line for 2 strategies, a triangle for 3) with a
+3. **Results**: a card shows the strategies as S1, S2, S3 in the colours of the plots, with their
+   decision tables (p(help) for each class of receiver and donor; φ-Disc by donor score), their
+   initial shares and, if ticked, their p(help) surfaces. Then the simplex (a line for 2 strategies, a triangle for 3) with a
    dense grid of arrows coloured and sized by speed, flow lines through the whole
    simplex, rest points (black stable, white unstable, gray saddle) and the
    trajectory from the initial shares. Where only some points' score chains
@@ -123,6 +131,10 @@ python -m gui            # then open http://127.0.0.1:8050
    through the trajectory. Figures download as PNG or SVG from each plot's
    toolbar; "Download data" gives the trajectory, vector field, rest points and
    selected point as CSV/JSON.
+
+The steps at the top are links, so you can move between the pages freely. From Parameters,
+"Current results →" goes back to the results of the last run without running it again (a
+note says if the settings have been changed since); Run starts a new one.
 
 `examples/` has settings files (load them on the first page) and phase
 portraits for Defectors / AllD-Disc / ternary (τ = 5) and Defectors /
@@ -150,6 +162,29 @@ engine doesn't, so `--maxw` is no longer accepted. In the committed runs where
 the cap mattered, the rates and class masses come out the same and the score
 distributions go past `maxw`. A small `maxw` that sends mass back down changed
 the rates too.
+
+## Plotting the ESS
+
+```
+pip install -r requirements.txt
+python scripts/ess_sweep.py run --norms binary-cn --eps 0.01 --maxn 500 --final-maxn 500 --out out/binary-cn
+python scripts/ess_sweep.py merge out/binary-cn
+python scripts/plot_ess.py out/binary-cn --show-cons          # writes out/binary-cn/ess_figure.png and .pdf
+```
+
+One row for every ESS found, sorted by cooperation level (fitness / (benefit - cost)),
+lowest at the top. On the left the scoring norm: one cell for each (recipient's class,
+whether the donor helped, donor's class), green where the score goes up, blue where it
+goes down, grey where it stays. A cell is wide when the ESS strategy takes that action
+there and narrow when it doesn't, so the wide cells are the ones that matter. On the right
+the cooperation level; the bars of the Leading Eight with their ESS strategy are black
+and labelled L1 to L8, and with `--show-cons` conservative norms (scores are only moved
+around) are ticked. With up to 30 rows the strategies are written out in the paper's
+names (AllD-Disc and so on). Binary and ternary norms both work (a ternary norm has 18
+cells); `--threshold`, `--max-rows`, `--title` and `--dpi` change what is drawn.
+`--paper-data` reads a data file of the paper's Julia code
+(https://github.com/bdotloh/origin_money, `indirect_reciprocity/data-default`). The design
+is that figure's (see `NOTICE`).
 
 ## Tests
 

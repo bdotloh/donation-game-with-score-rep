@@ -199,6 +199,35 @@ def _full_flow(page):
         page.click("#r-download-data")
     assert download.value.suggested_filename == "replicator_results.zip"
     shot(page, "4_after_play")
+
+    # The strategies are on the results page, in their colours and with the labels the plots use.
+    chips = page.locator(".strategy-card .chip")
+    assert chips.all_inner_texts() == ["S1", "S2", "S3"]
+    assert "AllD-Disc" in page.inner_text(".strategy-card >> nth=0") and "Ternary" in page.inner_text(".strategy-card >> nth=2")
+    page.get_by_text("Show the p(help) surfaces").click()
+    page.wait_for_selector(".strategy-card .mini .main-svg >> nth=2")
+    shot(page, "4b_strategies")
+
+    # Back to the parameters and on to the same results again, by the button and by the steps at the top.
+    page.click("#r-back")
+    page.wait_for_selector("#p-to-results", state="visible")
+    assert page.inner_text("#p-results-note") == ""                  # nothing changed since the run
+    set_text(page, "#p-eps", "0.2")
+    page.wait_for_function("document.querySelector('#p-results-note').innerText.includes('last run')")
+    set_text(page, "#p-eps", "0.1")
+    page.wait_for_function("document.querySelector('#p-results-note').innerText === ''")
+    page.click("#p-to-results")
+    page.wait_for_selector("#r-body:not([style*='none'])", timeout=60_000)
+    page.wait_for_selector("#r-simplex .main-svg")
+    assert chips.all_inner_texts() == ["S1", "S2", "S3"]
+    page.click("a.step:has-text('Parameters')")
+    page.wait_for_selector("#p-to-results", state="visible")
+    page.click("a.step:has-text('Results')")
+    page.wait_for_selector("#r-body:not([style*='none'])", timeout=60_000)
+    page.click("a.step:has-text('Strategies')")
+    page.wait_for_selector("#s-preview .main-svg")
+    assert page.locator(".selected-item").count() == 3
+    shot(page, "4c_back_and_forth")
     assert not page.errors, page.errors
 
 

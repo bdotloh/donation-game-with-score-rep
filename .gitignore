@@ -1,3 +1,12 @@
 __pycache__/
 .pytest_cache/
 .claude/
+
+# LaTeX build files
+docs/verification/*.aux
+docs/verification/*.log
+docs/verification/*.out
+docs/verification/pg-*.png
+
+# default output of the README's sweep commands
+out/
