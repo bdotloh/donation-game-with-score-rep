@@ -128,6 +128,29 @@ python -m gui            # then open http://127.0.0.1:8050
 portraits for Defectors / AllD-Disc / ternary (τ = 5) and Defectors /
 AllD-Disc / φ-Disc (φ = 0.17) under the money norm.
 
+## Scripts
+
+- `scripts/ess_sweep.py` finds the ESS for every norm in a set (binary or
+  ternary norms, binary, ternary or φ-Disc strategies). Runs can be resumed and
+  split over Slurm array tasks; `scripts/raapoi/` runs it on Rāpoi (see its README).
+- `scripts/run_markov_chain.py` runs one- or two-strategy score chains and saves
+  every step's rates, class masses and score distributions as CSV, with plots
+  (needs matplotlib). `--rich-threshold K` is τ = K − 1.
+- `experiments/ESS/find_ESS_parellel.py` is the earlier ESS sweep over the 1296
+  CN-only binary norms. It writes the CSV that `experiments/ESS/plot_results.py`
+  reads (`plot_results.py` also needs `plotting_funcs`, which isn't in this repo).
+- `experiments/verify-zeroness-one-strategy/` groups the 20736 one-strategy
+  chains by which of α, β, γ start out positive, and checks the limits claimed
+  for each group. Those claims are about scores capped at maxw, so the check runs
+  its own capped chain, with rates from the engine.
+
+These used to call the code in `src/`, which is gone; they now use `engine/` and
+reproduce the committed results. The old code capped scores at `maxw` and the
+engine doesn't, so `--maxw` is no longer accepted. In the committed runs where
+the cap mattered, the rates and class masses come out the same and the score
+distributions go past `maxw`. A small `maxw` that sends mass back down changed
+the rates too.
+
 ## Tests
 
 ```
@@ -143,6 +166,5 @@ python -m pytest -m e2e          # clicks through the GUI in a browser (needs pl
 `tests/test_engine.py` checks the closed forms in the notes (Defectors vs
 Discriminators, a population of 1-Disc) and the ternary and probabilistic cases;
 `tests/test_simplex.py` checks rest points and their stability against games
-with known answers. `benchmarks/bench_solver.py` times the score solver.
-
-The older code in `src/` and `experiments/` is unchanged for now.
+with known answers. `tests/test_ess_sweep.py` and `tests/test_run_markov_chain.py`
+check the scripts. `benchmarks/bench_solver.py` times the score solver.

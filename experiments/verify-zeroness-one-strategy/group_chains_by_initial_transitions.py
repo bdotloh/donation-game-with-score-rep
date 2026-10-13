@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Run and group all two-state CmeetsN-only BigB/strategy chains."""
+"""Run and group all two-state CmeetsN-only BigB/strategy chains.
+
+The chains are run by engine.StableScoreSolver (no noise), whose score range
+grows as needed: there is no maximum score.
+"""
 
 import argparse
 import csv
@@ -12,12 +16,9 @@ import sys
 
 import numpy as np
 
-SRC_DIR = Path(__file__).resolve().parents[2] / "src"
-sys.path.insert(0, str(SRC_DIR))
+sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 
-import compute_stable
-from compute_score_transitions import ComputeTransitionRates
-from helpers import count_bb_strings, generate_bb_strings, parse_bb_string, parse_strategy_string
+from engine import BinaryStrategy, Noise, Population, ScoringNorm, StableScoreSolver, all_norms  # noqa: E402
 
 
 RATE_NAMES = ("alpha", "beta", "gamma")
@@ -30,6 +31,19 @@ def strategy_strings():
     ]
 
 
+def bigb_name(norm):
+    """Barcode in the "CmeetsN:... NmeetsC:..." spelling of the earlier results."""
+    cn, nc = (part.split(":")[1] for part in norm.barcode.split())
+    return f"CmeetsN:{cn} NmeetsC:{nc}"
+
+
+def class_rates(solver, population, w):
+    """alpha, beta, gamma: the up-rate from score 0, and the up- and down-rates at score 1."""
+    w = np.pad(w, ((0, 0), (0, max(0, 3 - w.shape[1]))))
+    rates = solver.rates(population, w)
+    return rates.g[0, 1], rates.g[0, 2], rates.f[0, 1]
+
+
 def group_name(rates):
     return ",".join(
         f"{name}{'>0' if value > 0 else '=0'}"
@@ -38,21 +52,20 @@ def group_name(rates):
 
 
 def run_combo(job):
-    bb_string, strategy_string, w_0, maxw, maxn, tolerance = job
-    bb = parse_bb_string(bb_string, n_rep_states=2)
-    strategy = parse_strategy_string(strategy_string, n_rep_states=2)
-
-    initial_rates = ComputeTransitionRates(bb, strategy)(np.array([0.5, 0.5]))
-    result = compute_stable.with_1strategy(
-        bb,
-        strategy,
-        np.asarray(w_0, dtype=float),
-        maxn=maxn,
-        maxw=maxw,
-        n_rep_states=2,
-        tolerance=tolerance,
+    bb_string, strategy_string, w_0, maxn, tolerance = job
+    solver = StableScoreSolver(
+        ScoringNorm.from_barcode(bb_string),
+        Noise(),
+        tol=tolerance,
+        max_iter=maxn,
         stop_when_transient=False,
     )
+    population = Population([BinaryStrategy.from_name(strategy_string)])
+
+    initial_rates = class_rates(solver, population, np.array([[0.5, 0.5]]))
+    result = solver(population, np.asarray(w_0, dtype=float)[None])
+    # As before, the final rates are those of the last step, computed from w_prev.
+    final_rates = class_rates(solver, population, result.w_prev)
 
     return {
         "group": group_name(initial_rates),
@@ -64,11 +77,15 @@ def run_combo(job):
         "initial_alpha": initial_rates[0],
         "initial_beta": initial_rates[1],
         "initial_gamma": initial_rates[2],
-        "final_alpha": result["trans"][0],
-        "final_beta": result["trans"][1],
-        "final_gamma": result["trans"][2],
-        "final_score_0": result["w"][0],
-        "final_distribution_length": len(result["w"]),
+        "final_alpha": final_rates[0],
+        "final_beta": final_rates[1],
+        "final_gamma": final_rates[2],
+        "final_score_0": result.w[0, 0],
+        # Number of scores the chain tracked (it grows only while mass reaches the top score).
+        "final_distribution_length": result.w.shape[1],
+        "converged": int(result.converged),
+        # Up-rate >= down-rate at the top score: no stable distribution, the scores keep rising.
+        "drifting": int(result.drifting[0]),
     }
 
 
@@ -107,7 +124,7 @@ def write_summary(path, rows):
 
 def build_parser():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--maxw", type=int, default=100)
+    parser.add_argument("--maxw", type=int, help=argparse.SUPPRESS)
     parser.add_argument("--maxn", type=int, default=500)
     parser.add_argument("--tolerance", type=float, default=1e-5)
     parser.add_argument("--workers", type=int, default=max(1, (os.cpu_count() or 2) - 1))
@@ -121,18 +138,17 @@ def build_parser():
 
 def main():
     args = build_parser().parse_args()
-    if args.maxw < 1 or args.maxn < 1:
-        raise ValueError("maxw and maxn must be positive.")
+    if args.maxw is not None:
+        raise ValueError("--maxw is no longer supported: the score range grows as needed, so scores are not capped.")
+    if args.maxn < 1:
+        raise ValueError("maxn must be positive.")
 
     w_0 = np.array([0.5, 0.5])
-    bigbs = list(generate_bb_strings(n_rep_states=2, nmeetsc=False))
+    bigbs = [bigb_name(norm) for norm in all_norms(use_NC=False)]   # 2^4 * 3^4 = 1296
     strategies = strategy_strings()
-    expected_bigbs = count_bb_strings(n_rep_states=2, cmeetsn=True, nmeetsc=False)
-    if len(bigbs) != expected_bigbs:
-        raise RuntimeError(f"Expected {expected_bigbs} BigBs; generated {len(bigbs)}.")
 
     jobs = [
-        (bb_string, strategy, w_0, args.maxw, args.maxn, args.tolerance)
+        (bb_string, strategy, w_0, args.maxn, args.tolerance)
         for bb_string in bigbs
         for strategy in strategies
     ]
@@ -163,7 +179,6 @@ def main():
                 "cmeetsn": True,
                 "nmeetsc": False,
                 "initial_score_distribution": w_0.tolist(),
-                "maxw": args.maxw,
                 "maxn": args.maxn,
                 "tolerance": args.tolerance,
                 "bigb_count": len(bigbs),
