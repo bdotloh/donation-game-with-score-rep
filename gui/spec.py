@@ -11,6 +11,8 @@ full_steps: run every score chain for max_iter steps instead of stopping at the 
 import numpy as np
 
 from engine import (
+    LEADING_EIGHT,
+    MONEY,
     BinaryStrategy,
     Noise,
     Payoffs,
@@ -31,12 +33,15 @@ STRATEGY_PRESETS = {
     "Cooperators": "g,g|g,g",
     "AllD-Disc": "0,0|0,g",
     "Disc-Disc": "0,0|g,g",
+    "AllC-Disc": "g,0|g,g",
 }
 
 NORM_PRESETS = {
     "Lose a score for not helping someone with a score": "CN:00000-00 NC:00000000",
     "φ-Disc norm (notes, p. 7)": "CN:00000-0+ NC:00000000",
     "Money": "CN:00000-++ NC:00000+--",
+    "Money (only when help is given)": MONEY.barcode,
+    **{f"Leading Eight {n.title}": n.barcode for n in LEADING_EIGHT},
 }
 
 DEFAULT_ADVANCED = {

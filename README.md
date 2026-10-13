@@ -38,6 +38,12 @@ characters per rule: `ScoringNorm.from_barcode(code, tau=2)`, or lift a binary
 norm with `norm.to_ternary(tau)`. `all_norms(tau=None, use_CN=True, use_NC=True)`
 enumerates every valid norm.
 
+`LEADING_EIGHT` (in `engine/known_norms.py`) holds the Leading Eight norms L1 to L8 as
+barcodes (they change the donor only), each with the ESS strategy that goes with it, and
+`MONEY` the paper's money norm. They are presets in the GUI. A barcode stores changes, so
+they are the two-reputation Leading Eight exactly while scores stay at 0 and 1, which is
+the case without noise.
+
 ## Example
 
 ```python
@@ -150,6 +156,29 @@ engine doesn't, so `--maxw` is no longer accepted. In the committed runs where
 the cap mattered, the rates and class masses come out the same and the score
 distributions go past `maxw`. A small `maxw` that sends mass back down changed
 the rates too.
+
+## Plotting the ESS
+
+```
+pip install -r requirements.txt
+python scripts/ess_sweep.py run --norms binary-cn --eps 0.01 --maxn 500 --final-maxn 500 --out out/binary-cn
+python scripts/ess_sweep.py merge out/binary-cn
+python scripts/plot_ess.py out/binary-cn --show-cons          # writes out/binary-cn/ess_figure.png and .pdf
+```
+
+One row for every ESS found, sorted by cooperation level (fitness / (benefit - cost)),
+lowest at the top. On the left the scoring norm: one cell for each (recipient's class,
+whether the donor helped, donor's class), green where the score goes up, blue where it
+goes down, grey where it stays. A cell is wide when the ESS strategy takes that action
+there and narrow when it doesn't, so the wide cells are the ones that matter. On the right
+the cooperation level; the bars of the Leading Eight with their ESS strategy are black
+and labelled L1 to L8, and with `--show-cons` conservative norms (scores are only moved
+around) are ticked. With up to 30 rows the strategies are written out in the paper's
+names (AllD-Disc and so on). Binary and ternary norms both work (a ternary norm has 18
+cells); `--threshold`, `--max-rows`, `--title` and `--dpi` change what is drawn.
+`--paper-data` reads a data file of the paper's Julia code
+(https://github.com/bdotloh/origin_money, `indirect_reciprocity/data-default`). The design
+is that figure's (see `NOTICE`).
 
 ## Tests
 

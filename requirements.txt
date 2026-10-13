@@ -2,3 +2,4 @@ numpy
 scipy
 dash>=3
 plotly>=5.15
+matplotlib>=3.7
