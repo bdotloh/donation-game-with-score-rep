@@ -35,11 +35,11 @@ Binary ESS & \texttt{helper\_funcs.jl}, 3192 rows (809 ESS) & All 3192 rows agre
 ESS sweep script & \texttt{helper\_funcs.jl}, all 1296 CN-only norms, noise 0 and 0.01 & No differences \\
 Defectors against Discriminators & Notes, pages 5--6 & Every number reproduced, including the $1.10\times10^{-5}$ and $7.36\times10^{-5}$ differences \\
 $\phi$-Disc & Notes, pages 7--8 & Rates agree to $6\times10^{-17}$; $\pi_0=0.2555$, $\mathbb{E}[\text{score}]=1.889$; gamma-function solution agrees at every score \\
-Ternary classes and $\phi$-Disc & Independent models (Section~\ref{sec:independent}) & \textbf{See Section~\ref{sec:independent}} \\
+Ternary classes and $\phi$-Disc & Independent models (Section~\ref{sec:independent}) & Agree to $2\times10^{-15}$ (rates, chains); simulation within sampling noise \\
 Replicator dynamics and rest points & Closed forms and games with known answers & All pass \\
 Earlier scripts moved onto the engine & Old code and committed results & Agree to rounding, except where the old score cap bound \\
 Portability & Python 3.9 / numpy 1.26 / scipy 1.11 (R\=apoi) and Python 3.13 / numpy 2.5 / scipy 1.18 & Tests pass on both \\
-Test suite & 613 tests (2 browser tests run separately) & All pass \\
+Test suite & 650 tests (2 browser tests run separately) & All pass \\
 \bottomrule
 \end{tabular}
 \end{center}
@@ -148,7 +148,27 @@ The barcode lists the 8 entries in the order (needy player's class, whether the 
 
 \subsection{Independent verification}
 
-\textbf{[Results of the independent checks are being added to this section.]}
+Three independent checks were made after the engine was finished. The people (or agents) writing them did not use the engine's code to build their expected values.
+
+\textbf{A blind re-implementation.} A second implementation (\texttt{tests/independent\_model.py}, 137 lines) was written from the notes and \texttt{helper\_funcs.jl} before the engine's source was opened. It computes $G$, $F$, $g$ and $f$ by direct enumeration (loops over the other player's strategy and score, the roles, and whether help is given) and iterates the chains itself. It reproduces the Julia outputs on 345 binary cases to $1.8\times10^{-15}$ and the numbers of pages 4, 6, 7 and 8. Against the engine:
+\begin{itemize}
+\item 5000 random configurations of rates (binary, ternary and lifted norms; $\tau\in\{1,2,3,5,8\}$; one to three strategies of mixed kinds including probabilistic tables and $\phi$-Disc with $\phi\in[0,3]$; $\epsilon\in\{0,0.1,0.5,1\}$; shares of zero; mass beyond $\tau$ and mass only in the top class): largest difference $2.2\times10^{-16}$;
+\item 1780 chains of 25 to 400 steps: $1.1\times10^{-15}$, with mass conserved;
+\item stationary distributions: the independent fixed point of Eqs.~5--6 is unchanged by one engine step to $5\times10^{-15}$ on 227 configurations, and the engine's own converged runs agree to $5\times10^{-8}$ (set by its stopping rule);
+\item the three-segment closed form for a single class-based ternary strategy (100 cases), the $\phi$-Disc rates of page~7 (1000 cases, $1.4\times10^{-16}$), the gamma-function solution of page~8 for six noise settings ($2.8\times10^{-16}$), $\phi=0$ against the Discriminators (identical), and strategies whose classes differ from the norm's.
+\end{itemize}
+
+\textbf{An agent-based simulation.} A population of $10^6$ agents was simulated straight from the verbal model: each step every agent meets a random partner, roles are drawn, the Can helps with the strategy's probability, scores move by the norm, and with probability $\epsilon$ the move is replaced by noise. The score histograms were compared with the engine after the same number of steps, bin by bin with binomial standard errors. In 470 comparisons (the two example runs, $\phi$-Disc alone, Defectors against Discriminators, random ternary norms with probabilistic strategies, a mix of $\phi$-Disc and a ternary strategy) 468 were within five standard errors, and the total variation distances were at the level of pure sampling noise; the deviation falls as $N^{-1/2}$. The same yardsticks detect a 10\% change in $\epsilon$, a 4\% change in the role factor, and noise applied only when an interaction happens. The two exceptions are a random case that the engine itself flags as drifting, where the default stopping tolerance leaves the engine short of the stationary law (see below).
+
+\textbf{Hand-computed cases and planted bugs.} Eighteen small cases with $\tau=1$ and $2$ and a few occupied scores were worked out on paper from the notes (CN against NC, the recipient's index against the donor's, the class boundary at score $\tau$ and $\tau+1$, the noise arithmetic, and the exponent of $\phi$-Disc being the donor's score minus one for $G_j$); the engine matches them to $5.6\times10^{-17}$. Bugs were then planted in copies of the engine (a wrong cut-off, the wrong class for the donor, a transposed table, a wrong lift of a binary strategy to ternary, $\phi$-Disc helping a recipient without a score) and each suite was run against them. The existing engine tests missed three cut-off bugs (the engine tests alone do not guard the boundary at $\tau$); the independent tests and the hand cases catch all of them, and the engine tests catch the lift and transposition bugs that the simulation tests miss. All three suites are now in the repository (\texttt{test\_independent\_model.py}, 19 tests; \texttt{test\_agent\_based.py}, 12 tests at $10^5$ agents; \texttt{test\_hand\_cases.py}), so each covers the gaps of the others.
+
+\textbf{What this found.} No error in the rates, the norms, the strategies or the chains. Four points came up:
+\begin{itemize}
+\item At the default tolerance ($10^{-5}$ on the change in one step) the engine stops before the stationary law for slowly relaxing chains, and the Julia code does the same, so results quoted at the default tolerance are approximate; the simulation sides with the tightly converged distribution.
+\item \texttt{Noise} accepted $\epsilon_\uparrow+\epsilon_\downarrow>1$ and then produced negative ``probabilities''. It now refuses a sum above 1 (a sum below 1 is allowed; the notes take it to be 1).
+\item The README said a chain is drifting when the up-rate at the top score is at least the down-rate. When both are zero nothing can move and the engine, sensibly, does not call it drifting; the wording is corrected. Also, drifting does not strictly mean there is no stable distribution: in one configuration a stable distribution exists (it was found in closed form and is unchanged by an engine step) but the engine stayed in a slow drifting state for more than $3\times10^4$ steps.
+\item The two verifiers share the verbal model with the engine, so a misreading of the notes common to all of them would not be seen. The binary case is anchored to the Julia code. For ternary strategies and norms the conventions (the cut-off at $\tau$, the order of the 18 characters, the orientation of the strategy table) rest on the description given for the engine and on the lifting identity, not on any independent reference.
+\end{itemize}
 
 \section{Replicator dynamics, rest points and the GUI}
 
@@ -185,7 +205,7 @@ The ESS sweep is meant for R\=apoi, whose Python module is 3.9.5. The engine and
 
 \section{Test inventory}
 
-\texttt{python -m pytest} runs 613 tests, all passing; two browser tests are deselected by default.
+\texttt{python -m pytest} runs 650 tests, all passing; two browser tests are deselected by default.
 
 \begin{center}
 \begin{tabular}{@{}lrl@{}}
@@ -193,17 +213,20 @@ The ESS sweep is meant for R\=apoi, whose Python module is 3.9.5. The engine and
 File & Tests & Covers \\
 \midrule
 \texttt{test\_against\_julia.py} & 460 & 400 stable-score cases, 60 sampled ESS rows \\
-\texttt{test\_gui\_logic.py} & 50 & GUI parsing, validation, settings, presets \\
-\texttt{test\_engine.py} & 31 & norms, strategies, closed forms, ternary, invariants \\
+\texttt{test\_gui\_logic.py} & 54 & GUI parsing, validation, settings, presets \\
+\texttt{test\_engine.py} & 32 & norms, strategies, closed forms, ternary, invariants \\
 \texttt{test\_simplex.py} & 19 & grid, rest points, stability \\
 \texttt{test\_replicator.py} & 7 & dynamics, restart, role factor \\
-\texttt{test\_ess\_sweep.py} & 6 & norm sets, Slurm tasks, resume, merge, Julia agreement \\
-\texttt{test\_experiments.py} & 4 & ESS and zeroness scripts against committed results \\
+\texttt{test\_ess\_sweep.py} & 6 & sweep: Slurm tasks, resume, merge \\
+\texttt{test\_experiments.py} & 4 & ESS, zeroness scripts vs results \\
 \texttt{test\_run\_markov\_chain.py} & 4 & saved rates drive the saved score histories \\
 \texttt{test\_known\_norms.py} & 12 & Leading Eight structure and cooperative ESS \\
 \texttt{test\_plots.py} & 20 & ESS figure and its readers \\
+\texttt{test\_independent\_model.py} & 19 & independent re-implementation, closed forms \\
+\texttt{test\_agent\_based.py} & 12 & agent-based simulation \\
+\texttt{test\_hand\_cases.py} & 1 & 18 hand-computed cases \\
 \midrule
-Total & 613 & \\
+Total & 650 & \\
 \bottomrule
 \end{tabular}
 \end{center}
@@ -221,7 +244,7 @@ Total & 613 & \\
 \section{Reproducing the checks}
 
 \begin{verbatim}
-python -m pytest                          # 613 tests
+python -m pytest                          # 650 tests
 python -m pytest -m e2e                   # browser tests (needs playwright)
 python tests/reference/compare_ess.py     # every ESS row against Julia
 PYTHONPATH=. python docs/verification/make_figures.py   # the two figures
