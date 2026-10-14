@@ -37,49 +37,22 @@ def help_surface_values(strategy, max_score):
     return help_[receiver_class].T                        # [donor score, receiver score]
 
 
-def surface_nodes(strategy, max_score=10):
-    """What the p(help) surface is drawn through: positions on the axes, the score each stands for, tick marks
-    and the names of the classes there.
+def ternary_surface(strategy, title=None):
+    """p(help) of a ternary strategy as a surface through its decision points.
 
-    Binary and ternary strategies only depend on the class of a score, so the axes are the classes: binary 0
-    and 1 (1 = any positive score), ternary 0, 1 and tau, each a unit apart, with the surface carried on past the
-    last one without ticks. phi-Disc depends on the donor's own score, so its axes are the scores 0 to max_score."""
-    n_classes = strategy.partition.n_classes
-    if n_classes == 3:
-        tau = strategy.partition.tau
-        scores = [0, 1, tau, tau + 1, tau + 1]
-        ticks = ([0, 1, 2], ["0", "1", f"\u03c4 = {tau}"])
-        names = ["0", f"1\u2013{tau}", f"1\u2013{tau}", f">{tau}", f">{tau}"]
-        return np.arange(5.0), scores, ticks, names
-    if hasattr(strategy, "phi"):
-        scores = list(range(max_score + 1))
-        shown = scores[::2]                      # every other score is labelled; the plot is small
-        return np.arange(max_score + 1.0), scores, (shown, [str(j) for j in shown]), [str(j) for j in scores]
-    return np.arange(3.0), [0, 1, 1], ([0, 1], ["0", "1"]), ["0", "\u22651", "\u22651"]
-
-
-def strategy_surface(strategy, max_score=10, title=None):
-    """p(help) over (receiver score, donor score) as a surface through the decision points (see surface_nodes);
-    max_score only matters for phi-Disc."""
-    position, scores, (tick_values, tick_text), names = surface_nodes(strategy, max_score)
-    values = help_surface_values(strategy, max(scores))[np.ix_(scores, scores)]       # [donor, receiver]
+    The axes are the classes, a unit apart: 0, 1 and tau (the end of the middle class, scores 1 to tau),
+    with the surface carried on past tau (scores above it) without tick numbers."""
+    tau = strategy.partition.tau
+    position = np.arange(5.0)
+    scores = [0, 1, tau, tau + 1, tau + 1]
+    names = ["0", f"1\u2013{tau}", f"1\u2013{tau}", f">{tau}", f">{tau}"]
+    values = help_surface_values(strategy, tau + 1)[np.ix_(scores, scores)]            # [donor, receiver]
     hover = [[f"receiver score {names[r]}<br>donor score {names[d]}<br>p(help) {values[d, r]:.3g}"
-              for r in range(len(scores))] for d in range(len(scores))]
-    fig = go.Figure(
-        go.Surface(
-            x=position,
-            y=position,
-            z=values,
-            cmin=0,
-            cmax=1,
-            colorscale=[[0, "#cfdcf0"], [1, "#1f4e96"]],
-            showscale=False,
-            lighting=dict(ambient=0.75, diffuse=0.5),
-            text=hover,
-            hoverinfo="text",
-        )
-    )
-    axis = dict(range=[-0.1, position[-1] + 0.1], tickmode="array", tickvals=tick_values, ticktext=tick_text)
+              for r in range(5)] for d in range(5)]
+    fig = go.Figure(go.Surface(x=position, y=position, z=values, cmin=0, cmax=1,
+                               colorscale=[[0, "#cfdcf0"], [1, "#1f4e96"]], showscale=False,
+                               lighting=dict(ambient=0.75, diffuse=0.5), text=hover, hoverinfo="text"))
+    axis = dict(range=[-0.1, 4.1], tickmode="array", tickvals=[0, 1, 2], ticktext=["0", "1", f"\u03c4 = {tau}"])
     fig.update_layout(
         scene=dict(
             xaxis=dict(title="receiver score", **axis),
@@ -95,6 +68,53 @@ def strategy_surface(strategy, max_score=10, title=None):
         height=380,
     )
     return fig
+
+
+def plateau_surface(strategy, max_score=10, title=None):
+    """p(help) over (receiver score, donor score), drawn as flat plateaus over each integer score."""
+    values = help_surface_values(strategy, max_score)
+    delta = 0.02
+    edges = np.arange(max_score + 2) - 0.5
+    coords = np.sort(np.concatenate([edges[:-1] + delta, edges[1:] - delta]))
+    index = np.clip(np.round(coords).astype(int), 0, max_score)
+    z = values[np.ix_(index, index)]
+    fig = go.Figure(
+        go.Surface(
+            x=coords,
+            y=coords,
+            z=z,
+            cmin=0,
+            cmax=1,
+            colorscale=[[0, "#cfdcf0"], [1, "#1f4e96"]],
+            showscale=False,
+            lighting=dict(ambient=0.75, diffuse=0.5),
+            hovertemplate="receiver score %{x:.0f}<br>donor score %{y:.0f}<br>p(help) %{z:.3g}<extra></extra>",
+        )
+    )
+    axis = dict(range=[-0.5, max_score + 0.5], dtick=max(1, max_score // 5))
+    fig.update_layout(
+        scene=dict(
+            xaxis=dict(title="receiver score", **axis),
+            yaxis=dict(title="donor score", **axis),
+            zaxis=dict(title="p(help)", range=[0, 1.05], dtick=0.25),
+            camera=dict(eye=dict(x=-1.6, y=-1.6, z=1.0)),
+            aspectmode="manual",
+            aspectratio=dict(x=1, y=1, z=0.6),
+        ),
+        title=title,
+        margin=dict(l=0, r=0, t=40 if title else 10, b=0),
+        font=FONT,
+        height=380,
+    )
+    return fig
+
+
+def strategy_surface(strategy, max_score=10, title=None):
+    """p(help) over (receiver score, donor score): a ternary strategy as a surface through its classes
+    (the axes show 0, 1 and tau), the others as plateaus over each integer score up to max_score."""
+    if strategy.partition.n_classes == 3:
+        return ternary_surface(strategy, title)
+    return plateau_surface(strategy, max_score, title)
 
 
 # ---------------------------------------------------------------- simplex

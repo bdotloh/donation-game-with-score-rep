@@ -46,6 +46,8 @@ def layout():
                         "Preview",
                         [
                             dcc.Graph(id="s-preview", config=GRAPH_CONFIG),
+                            field("Scores shown", dcc.Input(id="s-range", type="text", value="10", inputMode="numeric", className="num"),
+                                  className="field inline"),
                         ],
                     ),
                 ],
@@ -134,14 +136,16 @@ def register(app):
         Input("s-tau", "value"),
         Input("s-phi", "value"),
         Input("s-name", "value"),
+        Input("s-range", "value"),
     )
-    def preview(kind, values, tau, phi, name):
+    def preview(kind, values, tau, phi, name, max_score):
         matrix = grid_values(ctx.inputs_list[1], 3 if kind == "ternary" else 2)
         cfg, error = current_strategy(kind, matrix, tau, phi, name)
+        max_score, _ = validation.positive_int(max_score, "Scores shown")
         if error:
             return no_update, error, None
         strategy = spec.build_strategy(cfg)
-        return figures.strategy_surface(strategy), "", cfg
+        return figures.strategy_surface(strategy, min(max_score or 10, 60)), "", cfg
 
     @app.callback(
         Output("store-strategies", "data"),
@@ -265,7 +269,7 @@ def unique_name(name, taken):
 
 
 def small_surface(cfg):
-    fig = figures.strategy_surface(spec.build_strategy(cfg))
+    fig = figures.strategy_surface(spec.build_strategy(cfg), max_score=6)
     fig.update_layout(height=200, margin=dict(l=0, r=0, t=0, b=0))
     fig.update_scenes(xaxis_title="receiver", yaxis_title="donor", zaxis_title="p")
     return fig

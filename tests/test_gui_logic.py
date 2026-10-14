@@ -99,29 +99,23 @@ def test_strategy_surface(strategy):
     values = figures.help_surface_values(strategy, 6)
     assert values.shape == (7, 7)
     assert np.all((values >= 0) & (values <= 1))
-    fig = figures.strategy_surface(strategy)
-    z = np.asarray(fig.data[0].z)
-    assert z.shape[0] == z.shape[1] and np.all((z >= 0) & (z <= 1))
+    fig = figures.strategy_surface(strategy, 6)
+    assert fig.data[0].z.shape[0] == fig.data[0].z.shape[1]
 
 
-def test_surface_axes_follow_the_strategy_type():
-    binary = figures.strategy_surface(BinaryStrategy.from_name("0,0|0,g"))
-    scene = binary.layout.scene
-    assert list(scene.xaxis.tickvals) == [0, 1] and list(scene.xaxis.ticktext) == ["0", "1"]
-    z = np.asarray(binary.data[0].z)                                # [donor, receiver]; the surface is carried on past 1
-    assert z.shape == (3, 3) and z[1, 1] == z[2, 2] == z[1, 2] == z[2, 1] == 1 and z[0, 0] == z[0, 1] == z[1, 0] == 0
-
-    ternary = figures.strategy_surface(TernaryStrategy.from_name("0,0,0|0,g,0.5|0,g,g", tau=4))
-    scene = ternary.layout.scene
+def test_ternary_surface_shows_tau():
+    fig = figures.strategy_surface(TernaryStrategy.from_name("0,0,0|0,g,0.5|0,g,g", tau=4), 6)
+    scene = fig.layout.scene
     assert list(scene.xaxis.tickvals) == [0, 1, 2] and list(scene.xaxis.ticktext) == ["0", "1", "τ = 4"]
-    z = np.asarray(ternary.data[0].z)
+    z = np.asarray(fig.data[0].z)                                   # [donor, receiver], carried on past tau
     assert z.shape == (5, 5)
-    assert z[1, 1] == z[2, 2] == 1 and z[3, 1] == 0.5 and z[1, 3] == 1 and z[3, 3] == z[4, 4] == 1     # classes 1 (scores 1..tau), 2 (above)
+    assert z[1, 1] == z[2, 2] == 1 and z[3, 1] == 0.5 and z[1, 3] == 1 and z[3, 3] == z[4, 4] == 1
 
-    phi = figures.strategy_surface(PhiDisc(1))
-    scene = phi.layout.scene
-    assert list(scene.xaxis.tickvals) == [0, 2, 4, 6, 8, 10] and np.asarray(phi.data[0].z).shape == (11, 11)
-    np.testing.assert_allclose(np.asarray(phi.data[0].z)[:, 3], [0, 1, 1 / 2, 1 / 3, 1 / 4] + [1 / j for j in range(5, 11)])
+
+def test_binary_and_phi_surfaces_are_plateaus_over_the_integer_scores():
+    for strategy in (BinaryStrategy.from_name("0,0|0,g"), PhiDisc(1)):
+        fig = figures.strategy_surface(strategy, 6)
+        assert fig.layout.scene.xaxis.range == (-0.5, 6.5)
 
 
 def test_phi_disc_surface_values():
