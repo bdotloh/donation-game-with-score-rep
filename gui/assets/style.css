@@ -108,3 +108,10 @@ table.pgrid td { min-width: 58px; border-radius: 4px; font-variant-numeric: tabu
 table.pgrid th { font-size: 12px; }
 .strategy-card .mini { height: 200px; }
 .results-note { align-self: center; }
+
+.barcode-text { font-family: ui-monospace, Menlo, monospace; font-size: 14px; background: var(--accent-soft);
+                padding: 2px 8px; border-radius: 4px; }
+table.norm-view td.change { min-width: 58px; border-radius: 4px; font-variant-numeric: tabular-nums; }
+td.change.up { background: #d3eba0; }
+td.change.same { background: #ececec; color: var(--muted); }
+td.change.down { background: #bcd7ff; }

@@ -48,6 +48,7 @@ def layout():
 
 def results_body():
     return [
+        card("Score update norm", html.Div(id="r-norm")),
         card("Strategies", [
             dcc.Checklist(id="r-surfaces", inline=True, className="checks",
                           options=[{"label": "Show the p(help) surfaces", "value": "on"}], value=[]),
@@ -77,6 +78,13 @@ def results_body():
         ),
         card("Score distribution", [
             dcc.Checklist(id="r-show-strategies", inline=True, className="checks"),
+            html.Div([
+                field("x from", dcc.Input(id="r-xmin", type="text", placeholder="auto", inputMode="decimal", className="num")),
+                field("x to", dcc.Input(id="r-xmax", type="text", placeholder="auto", inputMode="decimal", className="num")),
+                field("y from", dcc.Input(id="r-ymin", type="text", placeholder="auto", inputMode="decimal", className="num")),
+                field("y to", dcc.Input(id="r-ymax", type="text", placeholder="auto", inputMode="decimal", className="num")),
+                html.Div(id="r-range-error", className="status error"),
+            ], className="row bottom"),
             dcc.Graph(id="r-hist", config=GRAPH_CONFIG),
         ]),
         html.Div(
@@ -140,6 +148,7 @@ def register(app):
 
     @app.callback(
         Output("r-strategies", "children"),
+        Output("r-norm", "children"),
         Input("r-poll", "n_intervals"),
         Input("r-surfaces", "value"),
         State("store-run", "data"),
@@ -148,8 +157,8 @@ def register(app):
     def show_strategies(_, surfaces, run_id, shown):
         run = RUNS.get(run_id)
         if run is None or (ctx.triggered_id == "r-poll" and shown):     # drawn once, and again for the checkbox
-            return no_update
-        return strategy_cards(run, surfaces=bool(surfaces))
+            return no_update, no_update
+        return strategy_cards(run, surfaces=bool(surfaces)), norm_view(run.experiment["norm"])
 
     @app.callback(
         Output("r-selection", "data", allow_duplicate=True),
@@ -187,15 +196,21 @@ def register(app):
         Output("r-summary", "children"),
         Output("r-time", "children"),
         Output("r-simplex", "figure", allow_duplicate=True),
+        Output("r-range-error", "children"),
         Input("r-selection", "data"),
         Input("r-show-strategies", "value"),
+        Input("r-xmin", "value"),
+        Input("r-xmax", "value"),
+        Input("r-ymin", "value"),
+        Input("r-ymax", "value"),
         State("store-run", "data"),
         prevent_initial_call=True,
     )
-    def show_selection(selection, shown, run_id):
+    def show_selection(selection, shown, xmin, xmax, ymin, ymax, run_id):
         run = RUNS.get(run_id)
         if run is None or run.state != "done" or not selection:
-            return (no_update,) * 6
+            return (no_update,) * 7
+        x_range, y_range, range_error = axis_ranges(xmin, xmax, ymin, ymax)
         if selection["kind"] == "frame":
             state = run.frame(min(selection["frame"], len(run.trajectory.t) - 1))
         else:
@@ -206,7 +221,7 @@ def register(app):
         hidden = [n for n in names if n not in shown]
         hist = figures.score_histogram(names, np.asarray(state["rho"])[p], np.asarray(state["w"])[p], hidden=hidden,
                                        labels=labels, colors=[figures.COLORS[i] for i in p],
-                                       show_marginal="population" in shown)
+                                       show_marginal="population" in shown, x_range=x_range, y_range=y_range)
         payoff = figures.matrix_heatmap(np.asarray(state["payoff_matrix"])[np.ix_(p, p)], labels,
                                         "Payoff matrix A  (π = Aρ)", "strategy", "against", diverging=True)
         help_ = figures.matrix_heatmap(np.asarray(state["help_matrix"])[np.ix_(p, p)], labels, "Helping rates H",
@@ -218,7 +233,7 @@ def register(app):
             patch["data"][-1]["x"], patch["data"][-1]["y"] = list(x), list(y)
         else:
             patch["data"][-1]["x"], patch["data"][-1]["y"] = [state["rho"][1]], [0]
-        return hist, payoff, help_, summary(run, state, p), time, patch
+        return hist, payoff, help_, summary(run, state, p), time, patch, status(range_error, False)
 
     @app.callback(
         Output("r-player", "disabled"),
@@ -299,6 +314,43 @@ def click_composition(click):
     return rho if min(rho) >= 0 and sum(rho) > 0 else None
 
 
+ACTIONS = ["declines", "gives"]
+CHANGE = {"+": ("+1", "up"), "0": ("0", "same"), "-": ("\u22121", "down")}
+
+
+def norm_view(norm):
+    """The scoring norm of a run: its barcode, how to read it, and each rule as a table of score changes."""
+    n = 3 if norm["type"] == "ternary" else 2
+    labels = spec.class_labels(norm["type"], norm.get("tau"))
+    barcode = f"CN:{norm['CN']} NC:{norm['NC']}"
+    classes = ", ".join(f"{k} = score {label}" for k, label in enumerate(labels))
+    tables = []
+    for rule, title in (("CN", "Donor's score change (CN)"), ("NC", "Receiver's score change (NC)")):
+        code = norm[rule]
+        header = html.Tr([html.Th("receiver, action ↓  donor →", className="corner")]
+                         + [html.Th(f"score {label}") for label in labels])
+        rows = []
+        for need in range(n):
+            for act in range(2):
+                cells = []
+                for can in range(n):
+                    text, kind = CHANGE[code[need * 2 * n + act * n + can]]
+                    cells.append(html.Td(text, className=f"change {kind}"))
+                rows.append(html.Tr([html.Th(f"score {labels[need]}, {ACTIONS[act]}")] + cells))
+        tables.append(html.Div([html.Label(title), html.Table([header] + rows, className="grid norm-view")]))
+    convention = [
+        html.Div([html.Code(barcode, className="barcode-text"),
+                  html.Span(f"  τ = {norm['tau']}" if n == 3 else "", className="hint")]),
+        html.Div(
+            f"Reading the barcode: CN and NC are each {2 * n * n} symbols, one for every case, in the order receiver's "
+            f"class, then whether the donor declined or gave, then donor's class (the donor's class changes fastest). "
+            f"CN is the change to the donor's score, NC the change to the receiver's: + adds one, − takes one "
+            f"(a player with score 0 can't lose) and 0 leaves it. Classes: {classes}. "
+            f"Noise ε adds its own ±1 moves on top.", className="hint"),
+    ]
+    return convention + [html.Div(tables, className="two-col tight")]
+
+
 def strategy_cards(run, surfaces=False):
     """One card per strategy of the run: its label and colour, name, initial share and what it does."""
     cards = []
@@ -338,6 +390,29 @@ def strategy_table(cfg):
 def shade(p):
     """Cell colour that grows with the probability of helping."""
     return {"background": f"rgba(47, 95, 167, {0.06 + 0.42 * p:.2f})"}
+
+
+def axis_ranges(xmin, xmax, ymin, ymax):
+    """((x low, x high), (y low, y high), error): typed axis limits of the score distribution, None for auto.
+    A blank box is automatic; limits that can't be used are ignored with a message."""
+    values = []
+    for text, what in ((xmin, "x from"), (xmax, "x to"), (ymin, "y from"), (ymax, "y to")):
+        if text is None or str(text).strip() == "":
+            values.append(None)
+            continue
+        number = validation.parse_number(text)
+        if number is None:
+            return (None, None), (None, None), f"“{text}” is not a number ({what}); the axes are automatic."
+        values.append(number)
+    x_range, y_range = tuple(values[:2]), tuple(values[2:])
+    if x_range[1] is not None and x_range[1] > 5000:
+        return (None, None), (None, None), "x to can be at most 5000; the axes are automatic."
+    if y_range[0] is not None and y_range[0] < 0:
+        return (None, None), (None, None), "y from can't be negative; the axes are automatic."
+    for low, high, what in ((*x_range, "x"), (*y_range, "y")):
+        if low is not None and high is not None and low >= high:
+            return (None, None), (None, None), f"{what} from must be below {what} to; the axes are automatic."
+    return x_range, y_range, ""
 
 
 def present(rho, tol=1e-9):
