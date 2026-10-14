@@ -37,28 +37,49 @@ def help_surface_values(strategy, max_score):
     return help_[receiver_class].T                        # [donor score, receiver score]
 
 
+def surface_nodes(strategy, max_score=10):
+    """What the p(help) surface is drawn through: positions on the axes, the score each stands for, tick marks
+    and the names of the classes there.
+
+    Binary and ternary strategies only depend on the class of a score, so the axes are the classes: binary 0
+    and 1 (1 = any positive score), ternary 0, 1 and tau, each a unit apart, with the surface carried on past the
+    last one without ticks. phi-Disc depends on the donor's own score, so its axes are the scores 0 to max_score."""
+    n_classes = strategy.partition.n_classes
+    if n_classes == 3:
+        tau = strategy.partition.tau
+        scores = [0, 1, tau, tau + 1, tau + 1]
+        ticks = ([0, 1, 2], ["0", "1", f"\u03c4 = {tau}"])
+        names = ["0", f"1\u2013{tau}", f"1\u2013{tau}", f">{tau}", f">{tau}"]
+        return np.arange(5.0), scores, ticks, names
+    if hasattr(strategy, "phi"):
+        scores = list(range(max_score + 1))
+        shown = scores[::2]                      # every other score is labelled; the plot is small
+        return np.arange(max_score + 1.0), scores, (shown, [str(j) for j in shown]), [str(j) for j in scores]
+    return np.arange(3.0), [0, 1, 1], ([0, 1], ["0", "1"]), ["0", "\u22651", "\u22651"]
+
+
 def strategy_surface(strategy, max_score=10, title=None):
-    """p(help) over (receiver score, donor score), drawn as flat plateaus over each integer score."""
-    values = help_surface_values(strategy, max_score)
-    delta = 0.02
-    edges = np.arange(max_score + 2) - 0.5
-    coords = np.sort(np.concatenate([edges[:-1] + delta, edges[1:] - delta]))
-    index = np.clip(np.round(coords).astype(int), 0, max_score)
-    z = values[np.ix_(index, index)]
+    """p(help) over (receiver score, donor score) as a surface through the decision points (see surface_nodes);
+    max_score only matters for phi-Disc."""
+    position, scores, (tick_values, tick_text), names = surface_nodes(strategy, max_score)
+    values = help_surface_values(strategy, max(scores))[np.ix_(scores, scores)]       # [donor, receiver]
+    hover = [[f"receiver score {names[r]}<br>donor score {names[d]}<br>p(help) {values[d, r]:.3g}"
+              for r in range(len(scores))] for d in range(len(scores))]
     fig = go.Figure(
         go.Surface(
-            x=coords,
-            y=coords,
-            z=z,
+            x=position,
+            y=position,
+            z=values,
             cmin=0,
             cmax=1,
             colorscale=[[0, "#cfdcf0"], [1, "#1f4e96"]],
             showscale=False,
             lighting=dict(ambient=0.75, diffuse=0.5),
-            hovertemplate="receiver score %{x:.0f}<br>donor score %{y:.0f}<br>p(help) %{z:.3g}<extra></extra>",
+            text=hover,
+            hoverinfo="text",
         )
     )
-    axis = dict(range=[-0.5, max_score + 0.5], dtick=max(1, max_score // 5))
+    axis = dict(range=[-0.1, position[-1] + 0.1], tickmode="array", tickvals=tick_values, ticktext=tick_text)
     fig.update_layout(
         scene=dict(
             xaxis=dict(title="receiver score", **axis),
