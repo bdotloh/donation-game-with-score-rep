@@ -37,39 +37,6 @@ def help_surface_values(strategy, max_score):
     return help_[receiver_class].T                        # [donor score, receiver score]
 
 
-def ternary_surface(strategy, title=None):
-    """p(help) of a ternary strategy as a surface through its decision points.
-
-    The axes are the classes, a unit apart: 0, 1 and tau (the end of the middle class, scores 1 to tau),
-    with the surface carried on past tau (scores above it) without tick numbers."""
-    tau = strategy.partition.tau
-    position = np.arange(5.0)
-    scores = [0, 1, tau, tau + 1, tau + 1]
-    names = ["0", f"1\u2013{tau}", f"1\u2013{tau}", f">{tau}", f">{tau}"]
-    values = help_surface_values(strategy, tau + 1)[np.ix_(scores, scores)]            # [donor, receiver]
-    hover = [[f"receiver score {names[r]}<br>donor score {names[d]}<br>p(help) {values[d, r]:.3g}"
-              for r in range(5)] for d in range(5)]
-    fig = go.Figure(go.Surface(x=position, y=position, z=values, cmin=0, cmax=1,
-                               colorscale=[[0, "#cfdcf0"], [1, "#1f4e96"]], showscale=False,
-                               lighting=dict(ambient=0.75, diffuse=0.5), text=hover, hoverinfo="text"))
-    axis = dict(range=[-0.1, 4.1], tickmode="array", tickvals=[0, 1, 2], ticktext=["0", "1", f"\u03c4 = {tau}"])
-    fig.update_layout(
-        scene=dict(
-            xaxis=dict(title="receiver score", **axis),
-            yaxis=dict(title="donor score", **axis),
-            zaxis=dict(title="p(help)", range=[0, 1.05], dtick=0.25),
-            camera=dict(eye=dict(x=-1.6, y=-1.6, z=1.0)),
-            aspectmode="manual",
-            aspectratio=dict(x=1, y=1, z=0.6),
-        ),
-        title=title,
-        margin=dict(l=0, r=0, t=40 if title else 10, b=0),
-        font=FONT,
-        height=380,
-    )
-    return fig
-
-
 def plateau_surface(strategy, max_score=10, title=None):
     """p(help) over (receiver score, donor score), drawn as flat plateaus over each integer score."""
     values = help_surface_values(strategy, max_score)
@@ -110,10 +77,10 @@ def plateau_surface(strategy, max_score=10, title=None):
 
 
 def strategy_surface(strategy, max_score=10, title=None):
-    """p(help) over (receiver score, donor score): a ternary strategy as a surface through its classes
-    (the axes show 0, 1 and tau), the others as plateaus over each integer score up to max_score."""
+    """p(help) over (receiver score, donor score) as plateaus over each integer score up to max_score.
+    A ternary strategy is always shown past its cut-off tau, so the top class is visible too."""
     if strategy.partition.n_classes == 3:
-        return ternary_surface(strategy, title)
+        max_score = max(max_score, strategy.partition.tau + 3)
     return plateau_surface(strategy, max_score, title)
 
 
