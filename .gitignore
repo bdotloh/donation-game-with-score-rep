@@ -10,3 +10,6 @@ docs/verification/pg-*.png
 
 # default output of the README's sweep commands
 out/
+
+# saved results of the GUI
+saved_results/

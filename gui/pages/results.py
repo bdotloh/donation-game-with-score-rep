@@ -1,16 +1,18 @@
 """Page 3: the simplex with arrows and rest points, the trajectory, and what happens at a chosen point."""
 
+import base64
 import io
 import json
 import zipfile
+from pathlib import Path
 
 import numpy as np
 from dash import ALL, Input, Output, Patch, State, ctx, dcc, html, no_update
 
-from .. import figures, spec, validation
+from .. import figures, saves, spec, validation
 from ..compute import RUNS
 from ..components import GRAPH_CONFIG, card, field, status
-from .strategies import small_surface
+from .strategies import params_from_experiment, small_surface
 
 GRAPHS = ["r-simplex", "r-hist", "r-payoff", "r-help"]
 
@@ -37,6 +39,7 @@ def layout():
                 ],
                 className="title-row",
             ),
+            saves_card(),
             dcc.Interval(id="r-poll", interval=400),
             dcc.Interval(id="r-player", interval=120, disabled=True),
             dcc.Store(id="r-selection"),
@@ -44,6 +47,41 @@ def layout():
             html.Div(results_body(), id="r-body", style={"display": "none"}),
         ]
     )
+
+
+def save_options():
+    return [{"label": entry["label"], "value": entry["file"]} for entry in saves.list_saves()]
+
+
+def saves_card():
+    return card("Saved results", [
+        html.Div([
+            field("Save these results as", dcc.Input(id="r-save-name", type="text", placeholder="a name",
+                                                     maxLength=saves.MAX_NAME)),
+            html.Button("Save", id="r-save", className="secondary", n_clicks=0),
+            field("Load a saved result", dcc.Dropdown(id="r-load-choice", options=save_options(),
+                                                      placeholder="none saved yet" if not save_options() else "choose one"),
+                  className="field wide"),
+            html.Button("Load", id="r-load", className="secondary", n_clicks=0),
+            html.Button("Delete", id="r-delete", className="link", n_clicks=0),
+            dcc.ConfirmDialog(id="r-confirm-delete", message=""),
+        ], className="row bottom"),
+        html.Div([
+            html.Button("Download file", id="r-download-file", className="secondary", n_clicks=0),
+            html.Button("Download as CSV", id="r-download-csv", className="secondary", n_clicks=0),
+            dcc.Upload(html.Button("Upload a saved file…", className="secondary"), id="r-upload", accept=".sqlite",
+                       max_size=saves.MAX_FILE_BYTES),
+            dcc.Download(id="r-save-download"),
+            html.Span("(of the save chosen above)", className="hint"),
+        ], className="row bottom"),
+        html.Div(id="r-save-status"),
+        html.Div(f"Saves are SQLite files in the folder {saves.default_folder()}/ (next to where the GUI was started): "
+                 "tables of the points on the simplex with their shares, velocities, payoffs, payoff and helping "
+                 "matrices and score distributions, which any Python (sqlite3, pandas) or R can read. A save brings "
+                 "back the plots, rest points and trajectory without computing them again, with all its settings. "
+                 "The far tail of each score distribution (probabilities below 1e-12) is not stored.",
+                 className="hint"),
+    ])
 
 
 def results_body():
@@ -98,6 +136,7 @@ def results_body():
 
 
 def register(app):
+    register_saves(app)
     @app.callback(
         Output("r-progress", "children"),
         Output("r-body", "style"),
@@ -298,6 +337,123 @@ def register(app):
         if run.state != "done":
             return no_update
         return dcc.send_bytes(lambda buffer: buffer.write(results_zip(run, selection)), "replicator_results.zip")
+
+
+def register_saves(app):
+    @app.callback(
+        Output("r-save-status", "children"),
+        Output("r-load-choice", "options"),
+        Output("r-save-name", "value"),
+        Output("r-load-choice", "value", allow_duplicate=True),
+        Input("r-save", "n_clicks"),
+        State("r-save-name", "value"),
+        State("store-run", "data"),
+        prevent_initial_call=True,
+    )
+    def save(n_clicks, name, run_id):
+        if not n_clicks:
+            return no_update, no_update, no_update, no_update
+        try:
+            path = saves.save_run(RUNS.get(run_id), name)
+        except ValueError as error:
+            return status(str(error), False), no_update, no_update, no_update
+        return status(f"Saved as “{name.strip()}” ({path}).", True), save_options(), "", path.name
+
+    @app.callback(
+        Output("store-run", "data", allow_duplicate=True),
+        Output("store-strategies", "data", allow_duplicate=True),
+        Output("store-params", "data", allow_duplicate=True),
+        Output("r-save-status", "children", allow_duplicate=True),
+        Output("r-poll", "disabled", allow_duplicate=True),
+        Output("r-strategies", "children", allow_duplicate=True),
+        Input("r-load", "n_clicks"),
+        State("r-load-choice", "value"),
+        prevent_initial_call=True,
+    )
+    def load(n_clicks, choice):
+        keep = (no_update,) * 3
+        if not n_clicks:
+            return keep + (no_update,) * 3
+        if not choice:
+            return keep + (status("Choose a saved result to load.", False), no_update, no_update)
+        try:
+            run = saves.load_run(saves.default_folder() / Path(choice).name)
+        except ValueError as error:
+            return keep + (status(str(error), False), no_update, no_update)
+        experiment = run.experiment
+        message = status("Loaded. The parameters page now shows its settings.", True)
+        return (RUNS.add(run), experiment["strategies"], params_from_experiment(experiment), message,
+                False, None)                                # polling again draws the loaded run
+
+    @app.callback(
+        Output("r-confirm-delete", "displayed"),
+        Output("r-confirm-delete", "message"),
+        Output("r-save-status", "children", allow_duplicate=True),
+        Input("r-delete", "n_clicks"),
+        State("r-load-choice", "value"),
+        prevent_initial_call=True,
+    )
+    def ask_delete(n_clicks, choice):
+        if not n_clicks:
+            return no_update, no_update, no_update
+        if not choice:
+            return False, no_update, status("Choose a saved result to delete.", False)
+        return True, f"Delete the saved result “{Path(choice).stem}”? This can't be undone.", None
+
+    @app.callback(
+        Output("r-save-status", "children", allow_duplicate=True),
+        Output("r-load-choice", "options", allow_duplicate=True),
+        Output("r-load-choice", "value"),
+        Input("r-confirm-delete", "submit_n_clicks"),
+        State("r-load-choice", "value"),
+        prevent_initial_call=True,
+    )
+    def delete(submitted, choice):
+        if not submitted or not choice:
+            return no_update, no_update, no_update
+        try:
+            saves.delete_save(choice)
+        except ValueError as error:
+            return status(str(error), False), save_options(), None
+        return status("Deleted.", True), save_options(), None
+
+
+    @app.callback(
+        Output("r-save-download", "data"),
+        Output("r-save-status", "children", allow_duplicate=True),
+        Input("r-download-file", "n_clicks"),
+        Input("r-download-csv", "n_clicks"),
+        State("r-load-choice", "value"),
+        prevent_initial_call=True,
+    )
+    def download_save(file_clicks, csv_clicks, choice):
+        if not ctx.triggered[0]["value"]:
+            return no_update, no_update
+        if not choice:
+            return no_update, status("Choose a saved result to download.", False)
+        try:
+            if ctx.triggered_id == "r-download-csv":
+                return dcc.send_bytes(saves.export_csv(choice), f"{Path(choice).stem}_csv.zip"), None
+            return dcc.send_bytes(saves.read_file(choice), Path(choice).name), None
+        except ValueError as error:
+            return no_update, status(str(error), False)
+
+    @app.callback(
+        Output("r-save-status", "children", allow_duplicate=True),
+        Output("r-load-choice", "options", allow_duplicate=True),
+        Output("r-load-choice", "value", allow_duplicate=True),
+        Input("r-upload", "contents"),
+        prevent_initial_call=True,
+    )
+    def upload_save(contents):
+        if not contents:
+            return no_update, no_update, no_update
+        try:
+            content = base64.b64decode(contents.split(",", 1)[1])
+            name = saves.import_file(content)
+        except ValueError as error:
+            return status(str(error), False), no_update, no_update
+        return status("Added to the saved results. Press Load to open it.", True), save_options(), name
 
 
 def click_composition(click):

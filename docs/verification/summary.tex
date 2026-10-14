@@ -1,0 +1,37 @@
+\begin{longtable}{@{}r>{\raggedright\arraybackslash}p{4.2cm}>{\raggedright\arraybackslash}p{4.6cm}>{\raggedright\arraybackslash}p{3.3cm}l@{}}
+\toprule
+\# & Kind of check & Checked against & How many & Result \\
+\midrule
+\endhead
+1 & Binary engine & Julia code & 400 cases & Agree \\
+2 & Binary ESS & Julia code & 3192 rows & Agree \\
+3 & ESS sweep script & Julia code & 1296 norms $\times$ 2 noise levels & Agree \\
+4 & Lifted ternary & binary engine & 12 cases and 1296 norms & Agree \\
+5 & Notes: Defectors and Discriminators & the notes, pp.~5--6 & 7 quantities & Agree \\
+6 & Notes: $\phi$-Disc rates & the notes, p.~7 & 5 + 1000 settings & Agree \\
+7 & Notes: $\phi$-Disc, $\phi=1$ & the notes, p.~8 & 1 distribution, 6 settings & Agree \\
+8 & Notes: $\phi=0$ & the notes & 500 settings & Agree \\
+9 & Notes: stationary equations & the notes, Eq.~11 & 108 chains & Agree \\
+10 & Independent model: rates & independent model & 5000 configurations & Agree \\
+11 & Independent model: chains & independent model & 1780 chains & Agree \\
+12 & Independent model: stationary & independent model & 227 + 107 settings & Agree \\
+13 & Closed form: ternary & closed form & 100 configurations & Agree \\
+14 & Mismatched classes & independent model & 2100 configurations & Agree \\
+15 & Edge cases & independent model & 859 settings & Agree \\
+16 & Drifting flag & the rule & 833 configurations & Agree* \\
+17 & Agent-based simulation & simulation, $10^6$ agents & 470 comparisons & Agree* \\
+18 & Hand-computed cases & hand arithmetic & 18 cases & Agree \\
+19 & Planted bugs & 4 test suites & 25 planted bugs & Agree \\
+20 & Leading Eight & the paper's code & 8 norms & Agree \\
+21 & ESS figure & the paper's code & 2 figures, 20 tests & Agree \\
+22 & Published ESS data & the paper's data & 403 ESS rows & Open \\
+23 & Script: Markov chain & old script, committed runs & 20 + 1800 + 7 & Agree* \\
+24 & Script: ESS sweep (old) & old script, Julia & 1296 norms & Agree \\
+25 & Script: zeroness & old script, committed tables & 20736 chains & Agree* \\
+26 & Replicator dynamics and rest points & games with known answers & 26 tests & Agree \\
+27 & GUI & expected behaviour & 55 unit tests, 3 browser tests & Agree \\
+28 & Saved results & the saved run & 18 tests & Agree \\
+29 & Portability & Python 3.9 and 3.13 & 2 environments & Agree \\
+\bottomrule
+\end{longtable}
+Agree = no difference above what the check allows (rounding error for exact calculations, sampling noise for the simulation). Agree* = agree, with an exception explained in the check. Open = they differ and it is not explained.

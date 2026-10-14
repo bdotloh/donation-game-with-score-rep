@@ -1,0 +1,505 @@
+\subsection*{Check 1: Stable scores, payoffs and rates against the Julia code}
+\addcontentsline{toc}{subsection}{Check 1: Stable scores, payoffs and rates against the Julia code}
+
+\begin{description}\setlength\itemsep{0pt}
+
+\item[What was checked] The engine's final score distributions, payoffs and the three rates $\alpha,\beta,\gamma$ of binary strategies and norms.
+
+\item[Checked against] the output of \texttt{helper\_funcs.jl} (saved by \texttt{make\_reference.jl}).
+
+\item[How many] 400 cases: 200 with one strategy and 200 with two, at noise 0, 0.01 and 0.1, run for 0 to 1000 steps.
+
+\item[Result] \textbf{Agree}
+
+\item[Note] Payoffs follow Julia's convention: one strategy from the distribution before the last step, two strategies from the final one.
+
+\end{description}
+
+
+\subsection*{Check 2: The ESS search against the Julia code}
+\addcontentsline{toc}{subsection}{Check 2: The ESS search against the Julia code}
+
+\begin{description}\setlength\itemsep{0pt}
+
+\item[What was checked] The list of ESS that \texttt{find\_ESS} finds among the 16 binary strategies for a norm ($\rho_A=0.99$, 100 steps, fitness threshold $10^{-5}$).
+
+\item[Checked against] the output of \texttt{helper\_funcs.jl} (saved by \texttt{make\_reference.jl}).
+
+\item[How many] 3192 rows (1596 norms at noise 0 and at noise 0.01), 809 ESS in all.
+
+\item[Result] \textbf{Agree}
+
+\item[Note] Every row is compared by \texttt{tests/reference/compare\_ess.py}; the test suite checks a sample of 60.
+
+\end{description}
+
+
+\subsection*{Check 3: The sweep script against the Julia code}
+\addcontentsline{toc}{subsection}{Check 3: The sweep script against the Julia code}
+
+\begin{description}\setlength\itemsep{0pt}
+
+\item[What was checked] The ESS found by the sweep script (the one that runs on R\=apoi).
+
+\item[Checked against] The Julia ESS lists for the same norms.
+
+\item[How many] 1296 CN-only binary norms at noise 0 and at noise 0.01.
+
+\item[Result] \textbf{Agree}
+
+\end{description}
+
+
+\subsection*{Check 4: A ternary norm that ignores the cut-off against the binary result}
+\addcontentsline{toc}{subsection}{Check 4: A ternary norm that ignores the cut-off against the binary result}
+
+\begin{description}\setlength\itemsep{0pt}
+
+\item[What was checked] A binary norm and binary strategies lifted to ternary classes must give exactly the binary results.
+
+\item[Checked against] The binary engine.
+
+\item[How many] 12 test cases (4 norms $\times$ $\tau\in\{1,2,5\}$), and an ESS sweep of the 1296 CN-only norms lifted to ternary.
+
+\item[Result] \textbf{Agree}
+
+\end{description}
+
+
+\subsection*{Check 5: The worked example of pages 5 and 6}
+\addcontentsline{toc}{subsection}{Check 5: The worked example of pages 5 and 6}
+
+\begin{description}\setlength\itemsep{0pt}
+
+\item[What was checked] The stationary distributions of Defectors and Discriminators at $\epsilon=0.1$, $\epsilon_\uparrow=0.4$, $\epsilon_\downarrow=0.6$, and the comparison of 2000 steps with them.
+
+\item[Checked against] The closed-form numbers printed in the notes: $\pi_0=1/3$ and $0.754095$, $q(\boldsymbol\pi_0)=0.456286$, mean scores $0.326093$ and $2$, and the differences $1.10\times10^{-5}$ and $7.36\times10^{-5}$.
+
+\item[How many] 7 quantities from the notes, and both distributions at scores 0 to 20.
+
+\item[Result] \textbf{Agree}
+
+\item[Note] The notes do not say how the 2000 steps start; the initial distribution $(0.5,0.5)$ reproduces their differences.
+
+\end{description}
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=\textwidth]{figures/defectors_discriminators.png}
+\caption{Defectors and Discriminators. Left: closed-form stationary probabilities (lines) and the engine after 2000 steps (circles). Right: the absolute differences.}
+\end{figure}
+
+
+\subsection*{Check 6: The $\phi$-Disc rates of page 7}
+\addcontentsline{toc}{subsection}{Check 6: The $\phi$-Disc rates of page 7}
+
+\begin{description}\setlength\itemsep{0pt}
+
+\item[What was checked] The up- and down-rates $g_j$ and $f_j$ of a population of $\phi$-Disc players under \texttt{CN:00000-0+ NC:00000000}.
+
+\item[Checked against] The formulas of the notes, $G_j=\frac{1-w_0}{4(j-1)^{\phi}}$ and $F_j=\frac{1-w_0}{4}(1-j^{-\phi})$, with Eqs.~3--4.
+
+\item[How many] 5 values of $\phi$ (0, 0.17, 0.5, 1, 2) at scores 1 to 7, and 1000 random settings ($\phi\in[0,3]$, noise, score distributions).
+
+\item[Result] \textbf{Agree}
+
+\item[Note] The notes print the norm as \texttt{CN:000000-+}, which is not a valid norm (a score-0 donor would lose a score); \texttt{CN:00000-0+} is meant and is what reproduces the notes' numbers.
+
+\end{description}
+
+
+\subsection*{Check 7: The $\phi=1$ stationary distribution of page 8}
+\addcontentsline{toc}{subsection}{Check 7: The $\phi=1$ stationary distribution of page 8}
+
+\begin{description}\setlength\itemsep{0pt}
+
+\item[What was checked] The stationary score distribution of $\phi$-Disc players at $\epsilon=0.1$, $\epsilon_\uparrow=0.4$, $\epsilon_\downarrow=0.6$, and its $\pi_0$ and mean score.
+
+\item[Checked against] The gamma-function solution of the notes ($\pi_0\approx0.2555$, $\mathbb{E}[\text{score}]=1.889$), with $\pi_0$ from the normalisation equation.
+
+\item[How many] 1 distribution at all 440 tracked scores; 6 further settings of the noise.
+
+\item[Result] \textbf{Agree}
+
+\end{description}
+
+\begin{figure}[h]
+\centering
+\includegraphics[width=\textwidth]{figures/phi_disc.png}
+\caption{$\phi$-Disc with $\phi=1$. Left: the gamma-function solution (line) and the engine after 2000 steps from score 0 (circles). Right: the absolute differences.}
+\end{figure}
+
+
+\subsection*{Check 8: $\phi=0$ is the Discriminators}
+\addcontentsline{toc}{subsection}{Check 8: $\phi=0$ is the Discriminators}
+
+\begin{description}\setlength\itemsep{0pt}
+
+\item[What was checked] The rates of $\phi$-Disc with $\phi=0$ and of Discriminators in the same population.
+
+\item[Checked against] Each other (the notes say the two coincide).
+
+\item[How many] 500 random settings of the norm, noise and score distribution.
+
+\item[Result] \textbf{Agree}
+
+\end{description}
+
+
+\subsection*{Check 9: The fixed-point equation for $\pi_0$ (Eq.~11)}
+\addcontentsline{toc}{subsection}{Check 9: The fixed-point equation for $\pi_0$ (Eq.~11)}
+
+\begin{description}\setlength\itemsep{0pt}
+
+\item[What was checked] $\pi_0=\dfrac{f-g}{f-g+g_1}$ evaluated at the engine's converged distribution.
+
+\item[Checked against] The engine's own $\pi_0$.
+
+\item[How many] 108 chains from 150 random binary settings with one or two strategies (the 73 settings that never settled within 4000 steps were left out).
+
+\item[Result] \textbf{Agree}
+
+\item[Note] The detailed-balance equations (Eqs.~5--6) are checked on the stationary distributions in Check~12.
+
+\end{description}
+
+
+\subsection*{Check 10: The rates $G,F,g,f$ against an independent implementation}
+\addcontentsline{toc}{subsection}{Check 10: The rates $G,F,g,f$ against an independent implementation}
+
+\begin{description}\setlength\itemsep{0pt}
+
+\item[What was checked] The transition rates for random populations of binary, ternary and $\phi$-Disc strategies.
+
+\item[Checked against] an independent re-implementation of the model written from the notes and \texttt{helper\_funcs.jl} without looking at the engine's code (\texttt{tests/independent\_model.py}).
+
+\item[How many] 5000 random configurations: binary, ternary and lifted norms; $\tau\in\{1,2,3,5,8\}$; one to three strategies of mixed kinds (probabilistic and deterministic tables, $\phi\in[0,3]$); noise from 0 to 1; shares of zero; score distributions with mass beyond $\tau$.
+
+\item[Result] \textbf{Agree}
+
+\end{description}
+
+
+\subsection*{Check 11: The score chains over time against the independent implementation}
+\addcontentsline{toc}{subsection}{Check 11: The score chains over time against the independent implementation}
+
+\begin{description}\setlength\itemsep{0pt}
+
+\item[What was checked] The score distributions after 25 to 400 steps of the chain, with mass conserved.
+
+\item[Checked against] The independent implementation iterating the same chain.
+
+\item[How many] 1780 chains.
+
+\item[Result] \textbf{Agree}
+
+\end{description}
+
+
+\subsection*{Check 12: Stationary distributions}
+\addcontentsline{toc}{subsection}{Check 12: Stationary distributions}
+
+\begin{description}\setlength\itemsep{0pt}
+
+\item[What was checked] Whether a stationary distribution found independently (Eqs.~5--6 and a fixed point on the class masses) is left unchanged by one engine step, and whether the engine's own converged runs reach it.
+
+\item[Checked against] The independent implementation.
+
+\item[How many] 227 random settings for the first, 107 for the second.
+
+\item[Result] \textbf{Agree}
+
+\item[Note] How close a converged run gets is set by the engine's stopping rule, not by the model.
+
+\end{description}
+
+
+\subsection*{Check 13: Three geometric segments for a class-based ternary strategy}
+\addcontentsline{toc}{subsection}{Check 13: Three geometric segments for a class-based ternary strategy}
+
+\begin{description}\setlength\itemsep{0pt}
+
+\item[What was checked] The stationary distribution of one ternary strategy, which is geometric over the three classes.
+
+\item[Checked against] The closed form, with the class masses solved self-consistently, independently of the engine.
+
+\item[How many] 100 configurations ($\tau\in\{1,2,3,5,8\}$).
+
+\item[Result] \textbf{Agree}
+
+\end{description}
+
+
+\subsection*{Check 14: Strategies whose classes differ from the norm's}
+\addcontentsline{toc}{subsection}{Check 14: Strategies whose classes differ from the norm's}
+
+\begin{description}\setlength\itemsep{0pt}
+
+\item[What was checked] Rates when a strategy's cut-off $\tau$ differs from the norm's, or a binary strategy meets a ternary norm and the other way round (the engine uses the raw scores).
+
+\item[Checked against] The independent implementation.
+
+\item[How many] 2100 configurations.
+
+\item[Result] \textbf{Agree}
+
+\end{description}
+
+
+\subsection*{Check 15: Awkward settings}
+\addcontentsline{toc}{subsection}{Check 15: Awkward settings}
+
+\begin{description}\setlength\itemsep{0pt}
+
+\item[What was checked] Rates and chains at $\tau=1$, with an empty top class, with $\epsilon=0$, and with a strategy whose share is 0.
+
+\item[Checked against] The independent implementation (a population with and without the strategy of share 0).
+
+\item[How many] $\tau=1$: 300; empty top class: 200; $\epsilon=0$: 159; share 0: 200.
+
+\item[Result] \textbf{Agree}
+
+\end{description}
+
+
+\subsection*{Check 16: Which chains are flagged as drifting}
+\addcontentsline{toc}{subsection}{Check 16: Which chains are flagged as drifting}
+
+\begin{description}\setlength\itemsep{0pt}
+
+\item[What was checked] That the engine flags a chain exactly when its up-rate at the top score is positive and at least its down-rate.
+
+\item[Checked against] The rule, evaluated independently.
+
+\item[How many] 833 configurations.
+
+\item[Result] \textbf{Agree} (with the exception below)
+
+\item[Note] When nothing can move (both rates 0) the engine does not flag the chain; the README now says so.
+
+\end{description}
+
+
+\subsection*{Check 17: A simulated population against the engine}
+\addcontentsline{toc}{subsection}{Check 17: A simulated population against the engine}
+
+\begin{description}\setlength\itemsep{0pt}
+
+\item[What was checked] Score histograms after the same number of steps: a population of $10^6$ agents meeting random partners, with roles, help, the norm and noise drawn as in the model, against the engine.
+
+\item[Checked against] The engine, bin by bin, with binomial standard errors.
+
+\item[How many] 470 comparisons (the two example runs, $\phi$-Disc alone, Defectors against Discriminators, random ternary norms, a mix of $\phi$-Disc and a ternary strategy); 11 stationary scenarios, 48 comparisons.
+
+\item[Result] \textbf{Agree} (with the exception below)
+
+\item[Note] Two comparisons, both in one random case that the engine flags as drifting, fall outside the noise: the default stopping tolerance leaves the engine short of the stationary law there. The same test detects a 10\% error in $\epsilon$ and a 4\% error in the role factor.
+
+\end{description}
+
+
+\subsection*{Check 18: Small cases worked out on paper}
+\addcontentsline{toc}{subsection}{Check 18: Small cases worked out on paper}
+
+\begin{description}\setlength\itemsep{0pt}
+
+\item[What was checked] Rates for tiny populations at $\tau=1$ and $2$: CN against NC, the recipient's index against the donor's, the class boundary at scores $\tau$ and $\tau+1$, the noise arithmetic, the $\phi$-Disc exponent, one step of the chain.
+
+\item[Checked against] Numbers written as literal arithmetic from the notes.
+
+\item[How many] 18 cases.
+
+\item[Result] \textbf{Agree}
+
+\end{description}
+
+
+\subsection*{Check 19: Would the checks notice a mistake?}
+\addcontentsline{toc}{subsection}{Check 19: Would the checks notice a mistake?}
+
+\begin{description}\setlength\itemsep{0pt}
+
+\item[What was checked] Whether the test suites fail when a bug is planted in a copy of the engine (a wrong cut-off, a swapped CN and NC, a transposed table, a wrong lift to ternary, the wrong score in the $\phi$ exponent, a wrong role factor, \dots).
+
+\item[Checked against] Four suites: the hand cases, the independent tests, the repository's own tests and the simulation tests.
+
+\item[How many] 25 planted bugs.
+
+\item[Result] \textbf{Agree}
+
+\item[Note] Every bug was caught by at least one suite. No single suite caught them all (the repository's own tests missed three cut-off bugs; the simulation tests missed a transposed table and a wrong lift), which is why all four are kept.
+
+\end{description}
+
+
+\subsection*{Check 20: The Leading Eight norms}
+\addcontentsline{toc}{subsection}{Check 20: The Leading Eight norms}
+
+\begin{description}\setlength\itemsep{0pt}
+
+\item[What was checked] The barcodes, names and ESS strategies of L1 to L8 in \texttt{known\_norms.py}, and whether the engine finds a fully cooperative ESS for each.
+
+\item[Checked against] \texttt{createLeading8()} in the paper's code, and the engine's own ESS search (noise 0.001 and 0.01).
+
+\item[How many] 8 norms: barcodes and strategies equal; a cooperative ESS found for 8 of 8.
+
+\item[Result] \textbf{Agree}
+
+\item[Note] The five entries all eight share and the three that vary are also checked in the tests.
+
+\end{description}
+
+
+\subsection*{Check 21: The ESS figure against the paper's}
+\addcontentsline{toc}{subsection}{Check 21: The ESS figure against the paper's}
+
+\begin{description}\setlength\itemsep{0pt}
+
+\item[What was checked] \texttt{plots/ess\_plot.py}: the layout, sort order, cell widths, colours and Leading Eight labelling.
+
+\item[Checked against] The paper's \texttt{plotting\_funcs.py} and the figures it produced.
+
+\item[How many] 2 data files drawn and compared by eye (25 and 403 rows), and 20 unit tests.
+
+\item[Result] \textbf{Agree}
+
+\end{description}
+
+
+\subsection*{Check 22: The paper's published ESS table}
+\addcontentsline{toc}{subsection}{Check 22: The paper's published ESS table}
+
+\begin{description}\setlength\itemsep{0pt}
+
+\item[What was checked] The ESS the engine finds for every CN-only norm at noise 0.01 and 500 steps.
+
+\item[Checked against] The paper's file \texttt{tokens\_CmeetsN\_Noise0.01\_B2}.
+
+\item[How many] 403 published ESS rows (302 norms).
+
+\item[Result] \textbf{Open} (not yet explained)
+
+\item[Note] The engine finds 359 of them; every ESS it finds with fitness above 0.01 is in the file. 44 published ESS are not found, and the fitness values of the common rows differ by about $5\times10^{-4}$. Re-running the 65 norms where they differed with 200 steps leaves 20 of 113 published ESS missing. The number of steps of the published run is not recorded; fewer steps would explain missing ESS whose chains have not settled.
+
+\end{description}
+
+
+\subsection*{Check 23: \texttt{run\_markov\_chain.py} on the engine}
+\addcontentsline{toc}{subsection}{Check 23: \texttt{run\_markov\_chain.py} on the engine}
+
+\begin{description}\setlength\itemsep{0pt}
+
+\item[What was checked] Rates, class masses and score distributions of every step, and the number of steps.
+
+\item[Checked against] The old script and the seven run directories committed in the repository.
+
+\item[How many] 20 argument sets, 1800 random norms, strategies and initial distributions, and 7 committed runs.
+
+\item[Result] \textbf{Agree} (with the exception below)
+
+\item[Note] The old script capped scores at \texttt{maxw}; the engine does not. Where the cap did not bind the two agree. Where it did, the rates and class masses still agree in the committed runs while the score distributions continue above the cap; with a very small cap the old results differ.
+
+\end{description}
+
+
+\subsection*{Check 24: \texttt{experiments/ESS/find\_ESS\_parellel.py} on the engine}
+\addcontentsline{toc}{subsection}{Check 24: \texttt{experiments/ESS/find\_ESS\_parellel.py} on the engine}
+
+\begin{description}\setlength\itemsep{0pt}
+
+\item[What was checked] The ESS found for every CN-only norm, and the CSV written.
+
+\item[Checked against] The old code, the committed CSV and the Julia ESS lists.
+
+\item[How many] 1296 norms (333 ESS rows); the ternary path in 64 cases.
+
+\item[Result] \textbf{Agree}
+
+\item[Note] The old code took two-strategy payoffs from the distribution before the last step and the engine, like Julia, from the final one; this only reorders near-ties and changes no ESS.
+
+\end{description}
+
+
+\subsection*{Check 25: \texttt{experiments/verify-zeroness-one-strategy} on the engine}
+\addcontentsline{toc}{subsection}{Check 25: \texttt{experiments/verify-zeroness-one-strategy} on the engine}
+
+\begin{description}\setlength\itemsep{0pt}
+
+\item[What was checked] The group of initial rates, the final rates and the share of score 0 of every chain, and the limit-check tables.
+
+\item[Checked against] The old code and the committed tables.
+
+\item[How many] 20736 chains (1296 norms $\times$ 16 strategies); the 20736-row limit-check table; the rate function at 11 class masses for every chain.
+
+\item[Result] \textbf{Agree} (with the exception below)
+
+\item[Note] The old chains were capped at \texttt{maxw}, so about half of them now track more scores; the limit check keeps its own capped chain.
+
+\end{description}
+
+
+\subsection*{Check 26: Games with known answers}
+\addcontentsline{toc}{subsection}{Check 26: Games with known answers}
+
+\begin{description}\setlength\itemsep{0pt}
+
+\item[What was checked] Rest points and their stability, the replicator equation, and the restart of the score chains.
+
+\item[Checked against] Games whose answers are known (prisoner's dilemma, hawk--dove, coordination with two and three strategies, rock--paper--scissors in both versions), the invasion fitness of the engine's own payoffs, and the analytic Cooperators against Defectors.
+
+\item[How many] 26 tests (19 for the simplex and rest points, 7 for the dynamics).
+
+\item[Result] \textbf{Agree}
+
+\end{description}
+
+
+\subsection*{Check 27: The GUI logic and a click-through in a browser}
+\addcontentsline{toc}{subsection}{Check 27: The GUI logic and a click-through in a browser}
+
+\begin{description}\setlength\itemsep{0pt}
+
+\item[What was checked] Input checks, settings files, presets, figures, the strategies and norm cards, and a click through all three pages in Chromium (including going back to the results, typing axis ranges and saving).
+
+\item[Checked against] The expected behaviour.
+
+\item[How many] 55 unit tests, and 3 browser tests (full click-through, two strategies from a settings file, save and load).
+
+\item[Result] \textbf{Agree}
+
+\end{description}
+
+
+\subsection*{Check 28: Saving a result and loading it again}
+\addcontentsline{toc}{subsection}{Check 28: Saving a result and loading it again}
+
+\begin{description}\setlength\itemsep{0pt}
+
+\item[What was checked] That a loaded result has every number of the saved one, that a new point can still be computed, that the file is plain queryable tables, and that a taken name, a damaged file and a foreign file are refused.
+
+\item[Checked against] The finished run that was saved (2 and 3 strategies).
+
+\item[How many] 18 tests; every point on the simplex, every trajectory step, every matrix and distribution.
+
+\item[Result] \textbf{Agree}
+
+\item[Note] The far tail of each score distribution (probabilities below $10^{-12}$) is not stored and reads back as 0.
+
+\end{description}
+
+
+\subsection*{Check 29: Other versions of Python}
+\addcontentsline{toc}{subsection}{Check 29: Other versions of Python}
+
+\begin{description}\setlength\itemsep{0pt}
+
+\item[What was checked] That the engine and the sweep run on the Python that R\=apoi provides.
+
+\item[Checked against] Python 3.9 with numpy 1.26 and scipy 1.11, and Python 3.13 with numpy 2.5 and scipy 1.18.
+
+\item[How many] 2 environments: 517 engine tests and the sweep tests on 3.9; the whole suite on 3.13.
+
+\item[Result] \textbf{Agree}
+
+\end{description}
+

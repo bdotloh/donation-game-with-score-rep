@@ -56,15 +56,18 @@ class Run:
                                                 progress=self._progress(0.65, 1.0, n_steps + 1))
             self._trajectory_matrices()
             self.message = "Drawing the phase portrait…"
-            self.figure = figures.simplex_figure(
-                self.names, self.grid, [r.velocity for r in self.grid_results],
-                [r.converged for r in self.grid_results], self.rest_point_dicts(),
-                trajectory=self.trajectory.rho, current=self.trajectory.rho[0], labels=self.labels)
+            self.draw()
             self.state = "done"
             self.progress = 1.0
         except Exception as error:  # shown to the user
             self.state = "error"
             self.error = f"{type(error).__name__}: {error}"
+
+    def draw(self):
+        self.figure = figures.simplex_figure(
+            self.names, self.grid, [r.velocity for r in self.grid_results],
+            [r.converged for r in self.grid_results], self.rest_point_dicts(),
+            trajectory=self.trajectory.rho, current=self.trajectory.rho[0], labels=self.labels)
 
     def _progress(self, start, end, total=None):
         def report(done, total_=total):
@@ -134,6 +137,12 @@ class Runs:
         with self._lock:
             self._runs[run.id] = run
         threading.Thread(target=run.compute, daemon=True).start()
+        return run.id
+
+    def add(self, run):
+        """Register a run that is already finished (one loaded from a file)."""
+        with self._lock:
+            self._runs[run.id] = run
         return run.id
 
     def get(self, run_id):
