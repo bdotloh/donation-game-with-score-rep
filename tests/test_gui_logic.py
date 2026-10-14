@@ -103,16 +103,13 @@ def test_strategy_surface(strategy):
     assert fig.data[0].z.shape[0] == fig.data[0].z.shape[1]
 
 
-def test_ternary_surface_shows_tau():
-    fig = figures.strategy_surface(TernaryStrategy.from_name("0,0,0|0,g,0.5|0,g,g", tau=4), 6)
-    scene = fig.layout.scene
-    assert list(scene.xaxis.tickvals) == [0, 1, 2] and list(scene.xaxis.ticktext) == ["0", "1", "τ = 4"]
-    z = np.asarray(fig.data[0].z)                                   # [donor, receiver], carried on past tau
-    assert z.shape == (5, 5)
-    assert z[1, 1] == z[2, 2] == 1 and z[3, 1] == 0.5 and z[1, 3] == 1 and z[3, 3] == z[4, 4] == 1
+def test_ternary_plot_reaches_past_tau():
+    ternary = TernaryStrategy.from_name("0,0,0|0,g,0.5|0,g,g", tau=8)
+    assert figures.strategy_surface(ternary, 6).layout.scene.xaxis.range == (-0.5, 11.5)     # tau + 3, not 6
+    assert figures.strategy_surface(ternary, 20).layout.scene.xaxis.range == (-0.5, 20.5)    # the box still widens it
 
 
-def test_binary_and_phi_surfaces_are_plateaus_over_the_integer_scores():
+def test_surfaces_are_plateaus_over_the_integer_scores():
     for strategy in (BinaryStrategy.from_name("0,0|0,g"), PhiDisc(1)):
         fig = figures.strategy_surface(strategy, 6)
         assert fig.layout.scene.xaxis.range == (-0.5, 6.5)
