@@ -337,3 +337,13 @@ def test_histogram_uses_the_typed_ranges():
     assert auto.layout.yaxis.range is None
     low = figures.score_histogram(["a"], [1.0], w, y_range=(0.1, None))
     assert low.layout.yaxis.range[0] == 0.1 and low.layout.yaxis.range[1] == pytest.approx(0.525)
+
+
+def test_results_show_the_score_update_norm():
+    from gui.pages.results import norm_view
+
+    text = _text(norm_view({"type": "binary", "tau": None, "CN": "00000-0+", "NC": "00000000"}))
+    assert "CN:00000-0+ NC:00000000" in text and "Reading the barcode" in text and "8 symbols" in text
+    assert "score ≥1, declines" in text and "\u22121" in text and "+1" in text
+    ternary = _text(norm_view({"type": "ternary", "tau": 3, "CN": "0" * 18, "NC": "0" * 18}))
+    assert "18 symbols" in ternary and "score 1\u20133" in ternary and "τ = 3" in ternary

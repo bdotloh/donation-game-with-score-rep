@@ -48,6 +48,7 @@ def layout():
 
 def results_body():
     return [
+        card("Score update norm", html.Div(id="r-norm")),
         card("Strategies", [
             dcc.Checklist(id="r-surfaces", inline=True, className="checks",
                           options=[{"label": "Show the p(help) surfaces", "value": "on"}], value=[]),
@@ -147,6 +148,7 @@ def register(app):
 
     @app.callback(
         Output("r-strategies", "children"),
+        Output("r-norm", "children"),
         Input("r-poll", "n_intervals"),
         Input("r-surfaces", "value"),
         State("store-run", "data"),
@@ -155,8 +157,8 @@ def register(app):
     def show_strategies(_, surfaces, run_id, shown):
         run = RUNS.get(run_id)
         if run is None or (ctx.triggered_id == "r-poll" and shown):     # drawn once, and again for the checkbox
-            return no_update
-        return strategy_cards(run, surfaces=bool(surfaces))
+            return no_update, no_update
+        return strategy_cards(run, surfaces=bool(surfaces)), norm_view(run.experiment["norm"])
 
     @app.callback(
         Output("r-selection", "data", allow_duplicate=True),
@@ -310,6 +312,43 @@ def click_composition(click):
     except (TypeError, ValueError):
         return None
     return rho if min(rho) >= 0 and sum(rho) > 0 else None
+
+
+ACTIONS = ["declines", "gives"]
+CHANGE = {"+": ("+1", "up"), "0": ("0", "same"), "-": ("\u22121", "down")}
+
+
+def norm_view(norm):
+    """The scoring norm of a run: its barcode, how to read it, and each rule as a table of score changes."""
+    n = 3 if norm["type"] == "ternary" else 2
+    labels = spec.class_labels(norm["type"], norm.get("tau"))
+    barcode = f"CN:{norm['CN']} NC:{norm['NC']}"
+    classes = ", ".join(f"{k} = score {label}" for k, label in enumerate(labels))
+    tables = []
+    for rule, title in (("CN", "Donor's score change (CN)"), ("NC", "Receiver's score change (NC)")):
+        code = norm[rule]
+        header = html.Tr([html.Th("receiver, action ↓  donor →", className="corner")]
+                         + [html.Th(f"score {label}") for label in labels])
+        rows = []
+        for need in range(n):
+            for act in range(2):
+                cells = []
+                for can in range(n):
+                    text, kind = CHANGE[code[need * 2 * n + act * n + can]]
+                    cells.append(html.Td(text, className=f"change {kind}"))
+                rows.append(html.Tr([html.Th(f"score {labels[need]}, {ACTIONS[act]}")] + cells))
+        tables.append(html.Div([html.Label(title), html.Table([header] + rows, className="grid norm-view")]))
+    convention = [
+        html.Div([html.Code(barcode, className="barcode-text"),
+                  html.Span(f"  τ = {norm['tau']}" if n == 3 else "", className="hint")]),
+        html.Div(
+            f"Reading the barcode: CN and NC are each {2 * n * n} symbols, one for every case, in the order receiver's "
+            f"class, then whether the donor declined or gave, then donor's class (the donor's class changes fastest). "
+            f"CN is the change to the donor's score, NC the change to the receiver's: + adds one, − takes one "
+            f"(a player with score 0 can't lose) and 0 leaves it. Classes: {classes}. "
+            f"Noise ε adds its own ±1 moves on top.", className="hint"),
+    ]
+    return convention + [html.Div(tables, className="two-col tight")]
 
 
 def strategy_cards(run, surfaces=False):
