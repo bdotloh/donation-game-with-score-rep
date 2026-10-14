@@ -15,6 +15,11 @@ class Noise:
             value = getattr(self, name)
             if not 0.0 <= value <= 1.0:
                 raise ValueError(f"{name} must lie in [0, 1]; got {value}.")
+        if self.eps_up + self.eps_down > 1 + 1e-9:
+            # The notes take eps_up + eps_down = 1. A sum above 1 makes the up and down rates add to more
+            # than 1 and the "distribution" goes negative; a sum below 1 just leaves some noise doing nothing.
+            raise ValueError(f"eps_up + eps_down must not exceed 1 (the notes take it to be 1); "
+                             f"got {self.eps_up} + {self.eps_down}.")
 
     @classmethod
     def from_noise_val(cls, noise_val):

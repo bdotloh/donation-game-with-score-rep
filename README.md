@@ -12,7 +12,7 @@ Models of Indirect Reciprocity*:
 | w_j^(i), **w**₀ | `w[i, j]`, `result.w0` |
 | G_j^(i), F_j^(i) (interactions only) | `rates.G[i, j]`, `rates.F[i, j]` |
 | g_j^(i), f_j^(i) (with noise) | `rates.g[i, j]`, `rates.f[i, j]` |
-| ε, ε↑, ε↓ | `Noise(eps, eps_up, eps_down)` |
+| ε, ε↑, ε↓ | `Noise(eps, eps_up, eps_down)` (ε↑ + ε↓ ≤ 1; the notes take it to be 1) |
 | barcode `CN:… NC:…` | `ScoringNorm.from_barcode(...)` |
 
 `g[i, j]` is the rate from score j-1 to j and `f[i, j]` the rate from j to j-1.
@@ -51,7 +51,7 @@ from engine import *
 
 norm = ScoringNorm.from_barcode("CN:00000-0+ NC:00000000")
 population = Population([PhiDisc(1), Defectors()], rho=[0.9, 0.1])
-solver = StableScoreSolver(norm, Noise(eps=0.1, eps_up=0.2, eps_down=0.4))
+solver = StableScoreSolver(norm, Noise(eps=0.1, eps_up=0.4, eps_down=0.6))
 result = solver(population, w_init=[0.5, 0.5])
 
 result.w            # stable score distributions, one row per strategy
@@ -62,9 +62,11 @@ Payoffs(benefit=2, cost=1)(population, result.w)
 The chains run until the largest change in a step is at most `tol` (default
 1e-5), or `max_iter` steps. The score range grows as needed. `result.converged`
 is False if the chains hit `max_iter`, or if some strategy's up-rate at the top
-score is at least its down-rate (`result.drifting`): its scores then keep
-spreading upwards and there is no stable distribution, however small the change
-per step has become.
+score is positive and at least its down-rate (`result.drifting`). Its scores are then
+still spreading upwards, so a small change per step doesn't mean the distribution has
+settled: at those rates there is no stable distribution. One may exist for the class
+masses the chain would settle to, but the chain can take very long to get there. A
+chain in which nothing can move (both rates 0) is not drifting.
 
 `StableScoreSolver(..., role_factor=q * (1 - q))` and `Payoffs(role_factor=...)`
 set the probability of a given ordered (donor, receiver) pair when each
@@ -76,7 +78,7 @@ individual can help with probability q (1/4 for q = 1/2, as in `helper_funcs.jl`
 ## Replicator dynamics
 
 ```python
-solver = StableScoreSolver(norm, Noise(eps=0.1, eps_up=0.2, eps_down=0.4), max_iter=1000)
+solver = StableScoreSolver(norm, Noise(eps=0.1, eps_up=0.4, eps_down=0.6), max_iter=1000)
 dynamics = ReplicatorDynamics(solver, Payoffs(benefit=2, cost=1), dt=0.1)
 # For runs of a fixed length: StableScoreSolver(..., max_iter=2000, force_max_iter=True, tail_tol=1e-15)
 trajectory = dynamics.run([PhiDisc(1), Defectors()], rho=[0.9, 0.1], w_init=[0.5, 0.5], n_steps=500)

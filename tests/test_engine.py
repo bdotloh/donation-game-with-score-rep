@@ -274,3 +274,11 @@ def test_tail_trimming_barely_changes_results():
     L = trimmed.w.shape[1]
     np.testing.assert_allclose(trimmed.w, exact.w[:, :L], atol=1e-12)
     np.testing.assert_allclose(Payoffs()(population, trimmed.w), Payoffs()(population, exact.w), atol=1e-12)
+
+
+def test_noise_rejects_up_and_down_rates_that_add_to_more_than_one():
+    Noise(0.1, 0.4, 0.6)
+    Noise(0.1, 0.2, 0.4)                       # less than one is allowed
+    for bad in ((1, 1, 1), (0.1, 0.6, 0.6), (0.1, 0.5, 0.5000001)):
+        with pytest.raises(ValueError, match="eps_up"):
+            Noise(*bad)
