@@ -6,6 +6,7 @@ Screenshots go to $GUI_SCREENSHOTS (default: a temporary directory).
 
 import glob
 import os
+import re
 import tempfile
 import threading
 import time
@@ -76,10 +77,12 @@ def shot(page, name):
 def choose(page, dropdown_id, option_text):
     page.click(f"#{dropdown_id}")
     page.get_by_role("option", name=option_text, exact=True).click()
+    page.wait_for_load_state("networkidle")          # let the callbacks that follow (the preview) finish
 
 
 def click_plot(page, selector, fx, fy):
     """Hover, then click, at a fraction (fx, fy) of a plot area (Plotly clicks the hovered point)."""
+    page.locator(selector).scroll_into_view_if_needed()          # the cards above the plot push it down
     box = page.locator(selector).bounding_box()
     x, y = box["x"] + fx * box["width"], box["y"] + fy * box["height"]
     page.mouse.move(x - 5, y)
@@ -108,6 +111,7 @@ def _full_flow(page):
     page.wait_for_selector("#s-preview .main-svg")
     choose(page, "s-preset", "AllD-Disc")
     page.wait_for_function("document.querySelector('#s-name').value === 'AllD-Disc'")
+    page.wait_for_load_state("networkidle")
     page.click("#s-add")
     choose(page, "s-preset", "Defectors")
     page.wait_for_function("document.querySelector('#s-name').value === 'Defectors'")
@@ -119,6 +123,7 @@ def _full_flow(page):
     for k, value in enumerate(["0", "0", "0", "0", "1", "0.5", "0", "1", "1"]):
         set_text(page, f".cell input >> nth={k}", value)
     set_text(page, "#s-name", "Ternary")
+    page.wait_for_load_state("networkidle")            # the preview has to catch up with what was typed
     page.wait_for_function("!document.querySelector('#s-add').disabled")
     page.click("#s-add")
     page.wait_for_selector(".selected-item >> nth=2")
@@ -226,6 +231,7 @@ def _full_flow(page):
     page.wait_for_selector("#r-body:not([style*='none'])", timeout=60_000)
     page.click("a.step:has-text('Strategies')")
     page.wait_for_selector("#s-preview .main-svg")
+    page.wait_for_selector(".selected-item >> nth=2")
     assert page.locator(".selected-item").count() == 3
     shot(page, "4c_back_and_forth")
     assert not page.errors, page.errors
@@ -268,5 +274,90 @@ def test_two_strategies_from_settings_file(page, server, tmp_path):
         assert not page.errors, page.errors
     except Exception:
         shot(page, "failure_two")
+        dump_threads()
+        raise
+
+
+def test_save_and_load_results(page, server, tmp_path, monkeypatch):
+    """Save a finished result under a name, forget everything, and load it back without recomputing."""
+    import json
+
+    monkeypatch.setenv("DONATION_GAME_SAVES", str(tmp_path))
+    settings = {
+        "version": 1,
+        "strategies": [
+            {"type": "binary", "name": "Disc-Disc", "P": [[0, 0], [1, 1]], "tau": None, "phi": None},
+            {"type": "phi", "name": "phi-Disc", "P": None, "tau": None, "phi": 1.0},
+        ],
+        "shares": [0.8, 0.2],
+        "scores": [{"score": 0, "mass": 0.5}, {"score": 1, "mass": 0.5}],
+        "norm": {"type": "binary", "tau": None, "CN": "00000-0+", "NC": "00000000"},
+        "noise": {"eps": 0.1, "eps_up": 0.3, "eps_down": 0.7},
+        "p_can": 0.5, "benefit": 2, "cost": 1, "dt": 1.0, "n_steps": 10, "max_iter": 200, "tol": 1e-5,
+        "resolution": 4,
+    }
+    path = tmp_path / "settings.json"
+    path.write_text(json.dumps(settings))
+    try:
+        page.goto(server)
+        page.wait_for_selector("#s-upload input[type=file]", state="attached")
+        page.set_input_files("#s-upload input[type=file]", str(path))
+        page.wait_for_selector("#p-norm-grid table")
+        page.click("#p-run")
+        page.wait_for_selector("#r-body:not([style*='none'])", timeout=600_000)
+        page.wait_for_selector("#r-simplex .main-svg")
+        # A name is needed, and a taken name is refused.
+        page.click("#r-save")
+        page.wait_for_selector("#r-save-status .status.error")
+        set_text(page, "#r-save-name", "my run")
+        page.click("#r-save")
+        page.wait_for_selector("#r-save-status .status.ok")
+        assert (tmp_path / "my_run.sqlite").exists()
+        set_text(page, "#r-save-name", "my run")
+        page.click("#r-save")
+        page.wait_for_function("document.querySelector('#r-save-status').innerText.includes('already')")
+        # The save is chosen in the list, so it can be downloaded as a file (to upload again) or as CSVs.
+        with page.expect_download() as download:
+            page.click("#r-download-file")
+        assert download.value.suggested_filename == "my_run.sqlite"
+        download.value.save_as(tmp_path / "downloaded.sqlite")
+        with page.expect_download() as download:
+            page.click("#r-download-csv")
+        assert download.value.suggested_filename == "my_run_csv.zip"
+
+        # Forget the session, then load the result back.
+        page.evaluate("sessionStorage.clear()")
+        page.goto(server + "/results")
+        page.wait_for_selector("text=Nothing has been run yet")
+        page.click("#r-load")
+        page.wait_for_selector("#r-save-status .status.error")                      # nothing chosen
+        page.locator("#r-load-choice").click()
+        page.get_by_role("option", name=re.compile("^my run")).last.click()
+        page.click("#r-load")
+        page.wait_for_selector("#r-body:not([style*='none'])", timeout=60_000)
+        page.wait_for_selector("#r-simplex .main-svg")
+        page.wait_for_selector("#r-hist .main-svg")
+        assert page.locator(".strategy-card .chip").all_inner_texts() == ["S1", "S2"]
+        assert "CN:00000-0+" in page.inner_text("#r-norm")
+        # Its settings are on the parameters page again.
+        page.click("a.step:has-text('Parameters')")
+        page.wait_for_selector("#p-barcode")
+        assert page.input_value("#p-barcode") == "CN:00000-0+ NC:00000000"
+        # Delete it.
+        page.click("a.step:has-text('Results')")
+        page.locator("#r-load-choice").click()
+        page.get_by_role("option", name=re.compile("^my run")).last.click()
+        page.once("dialog", lambda dialog: dialog.accept())
+        page.click("#r-delete")
+        page.wait_for_function("document.querySelector('#r-save-status').innerText.includes('Deleted')")
+        assert not (tmp_path / "my_run.sqlite").exists()
+        # Upload the downloaded file: it comes back under its own name (a taken name is refused; see test_saves.py).
+        page.set_input_files("#r-upload input[type=file]", str(tmp_path / "downloaded.sqlite"))
+        page.wait_for_function("document.querySelector('#r-save-status').innerText.includes('Added')")
+        assert (tmp_path / "my_run.sqlite").exists()
+        shot(page, "6_saves")
+        assert not page.errors, page.errors
+    except Exception:
+        shot(page, "failure_saves")
         dump_threads()
         raise

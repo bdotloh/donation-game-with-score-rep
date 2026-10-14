@@ -139,6 +139,25 @@ The steps at the top are links, so you can move between the pages freely. From P
 "Current results →" goes back to the results of the last run without running it again (a
 note says if the settings have been changed since); Run starts a new one.
 
+**Saved results.** The Results page can save a finished run under a name, load it back, delete it, download
+it as a file and upload a file saved earlier (a taken name is refused). A save is one SQLite file in
+`saved_results/` (or `$DONATION_GAME_SAVES`), made of plain tables: `points` (one row for every point on the
+simplex and every step of the trajectory, with its shares, velocity dρ/dt, payoffs), `payoff_matrix`,
+`help_matrix`, `score_distribution` (with `distribution` giving the full length: the far tail, where every
+probability is below 1e-12, is not stored and reads as 0), `rest_points`, `strategy`, `settings` and `run`, plus the
+views `mean_score` and `point_strategy`. Loading brings back the plots without computing them again and puts the
+settings on the Strategies and Parameters pages; a new point clicked on the simplex is still computed. The file
+can be read from anywhere:
+
+```python
+import sqlite3, pandas as pd
+db = sqlite3.connect("saved_results/my_run.sqlite")
+pd.read_sql("select * from point_strategy where kind = 'grid' and strategy = 1", db)
+pd.read_sql("select * from payoff_matrix where point_id = 1", db)
+```
+
+"Download as CSV" gives one CSV per table. Details are at the top of `gui/saves.py`.
+
 `examples/` has settings files (load them on the first page) and phase
 portraits for Defectors / AllD-Disc / ternary (τ = 5) and Defectors /
 AllD-Disc / φ-Disc (φ = 0.17) under the money norm.
