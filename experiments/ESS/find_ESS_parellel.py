@@ -96,7 +96,7 @@ def run_one_bigb(args):
     solver = StableScoreSolver(ScoringNorm.from_barcode(bb_name, tau), noise, max_iter=maxn)
     finder = ESSFinder(solver, Payoffs(benefit, cost), rho=rhoA, fitness_threshold=fit_threshold)
     invaders = [make_strategy(name, tau) for name in invader_options]
-    # fitness is the payoff without the role factor 1/4 (fit * 4 in helper_funcs.jl).
+    # fitness is the payoff without the role factor 1/4.
     fitness = Payoffs(benefit, cost, role_factor=1)
 
     ess = []
@@ -110,7 +110,7 @@ def run_one_bigb(args):
         ess.append(ess_name)
         ess_details.append({
             "name": ess_name,
-            "fitness": float(fitness(population, stable.w_prev)[0]),
+            "fitness": float(fitness(population, stable.w)[0]),
             "w": stable.w[0],
             "trans": [float(x) for x in class_rates(solver, population, stable.w_prev, tau)],
         })
