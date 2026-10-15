@@ -174,13 +174,15 @@ class Sweep:
         for strategy in finder(self.candidates, self.invaders, self.w_init):
             population = Population([strategy])
             result = solver(population, self.w_init)
-            w = result.w_prev[0]                     # the distribution the payoff is computed from
-            g, f = result.rates.g[0], result.rates.f[0]
+            w = result.w[0]
             top = (self.args.tau or 0) + 1           # first score of the top class (ternary)
+            w_pad = np.pad(result.w, ((0, 0), (0, max(0, top + 2 - result.w.shape[1]))))
+            rates = solver.rates(population, w_pad)  # rates of the final distribution
+            g, f = rates.g[0], rates.f[0]
             rows.append({
                 "norm": norm.barcode if not norm.is_ternary else f"{norm.barcode} (tau={norm.partition.tau})",
                 "ess": strategy.name,
-                "fitness": 4 * payoffs(population, result.w_prev)[0],   # scaled to at most b - c, as helper_funcs.jl prints
+                "fitness": 4 * payoffs(population, result.w)[0],   # scaled to at most b - c
                 "w0": w[0],
                 "w1": w[1] if len(w) > 1 else 0.0,
                 "mean_score": float(np.arange(len(w)) @ w),

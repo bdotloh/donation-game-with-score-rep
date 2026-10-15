@@ -1,12 +1,10 @@
-"""Evolutionarily stable strategies, following find_ESS in helper_funcs.jl.
+"""Evolutionarily stable strategies.
 
 Maynard Smith and Price: A is an ESS if, for every B != A, either
     E(A,A) >  E(B,A)                     (a rare B dies out in a population of A), or
     E(A,A) == E(B,A) and E(A,B) > E(B,B) (A would invade a population of B from rare).
 
-To reproduce helper_funcs.jl, payoffs of a single-strategy population use the
-distribution that generated the last rates (w_prev), while payoffs of a
-two-strategy population use the final distribution (w).
+Payoffs are always computed from the final score distribution (result.w).
 """
 
 from .population import Population
@@ -20,7 +18,7 @@ class ESSFinder:
         rho               frequency of the resident A when tested against an invader B.
         fitness_threshold candidates whose 4 * payoff on their own is below this are skipped.
         final_max_iter    max_iter of the last check that an ESS is not a "boring" one
-                          (helper_funcs.jl uses its default maxn of 100 here).
+                          (default 100).
         """
         self.solver = solver
         self.final_solver = solver.with_options(max_iter=final_max_iter)
@@ -31,7 +29,7 @@ class ESSFinder:
     def payoff_alone(self, strategy, w_init, solver=None):
         population = Population([strategy])
         result = (solver or self.solver)(population, w_init)
-        return self.payoffs(population, result.w_prev)[0]
+        return self.payoffs(population, result.w)[0]
 
     def payoffs_against(self, A, B, rho_A, w_init):
         population = Population([A, B], [rho_A, 1 - rho_A])
