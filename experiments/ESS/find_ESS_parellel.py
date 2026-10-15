@@ -60,12 +60,12 @@ def make_strategy(name, tau):
     return BinaryStrategy.from_name(name) if tau is None else TernaryStrategy.from_name(name, tau)
 
 
-def class_rates(solver, population, w_prev, tau):
+def class_rates(solver, population, w, tau):
     """alpha, beta, gamma (binary) or alpha, beta1, gamma1, beta2, gamma2 (ternary) of strategy 0:
     up-rate from score 0, and up/down rates of a score in the middle (and top) class."""
     top = 1 if tau is None else tau + 1         # lowest score of the top class
-    pad = max(0, top + 1 - w_prev.shape[1])     # rates are only given at tracked scores
-    rates = solver.rates(population, np.pad(w_prev, ((0, 0), (0, pad))))
+    pad = max(0, top + 1 - w.shape[1])     # rates are only given at tracked scores
+    rates = solver.rates(population, np.pad(w, ((0, 0), (0, pad))))
     g, f = rates.g[0], rates.f[0]
     if tau is None:
         return [g[1], g[2], f[1]]
@@ -112,7 +112,7 @@ def run_one_bigb(args):
             "name": ess_name,
             "fitness": float(fitness(population, stable.w)[0]),
             "w": stable.w[0],
-            "trans": [float(x) for x in class_rates(solver, population, stable.w_prev, tau)],
+            "trans": [float(x) for x in class_rates(solver, population, stable.w, tau)],
         })
 
     return {

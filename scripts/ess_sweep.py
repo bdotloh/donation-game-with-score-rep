@@ -175,8 +175,10 @@ class Sweep:
             population = Population([strategy])
             result = solver(population, self.w_init)
             w = result.w[0]
-            g, f = result.rates.g[0], result.rates.f[0]
             top = (self.args.tau or 0) + 1           # first score of the top class (ternary)
+            w_pad = np.pad(result.w, ((0, 0), (0, max(0, top + 2 - result.w.shape[1]))))
+            rates = solver.rates(population, w_pad)  # rates of the final distribution
+            g, f = rates.g[0], rates.f[0]
             rows.append({
                 "norm": norm.barcode if not norm.is_ternary else f"{norm.barcode} (tau={norm.partition.tau})",
                 "ess": strategy.name,
