@@ -27,13 +27,15 @@ def create_app():
         ]
     )
 
-    @app.callback(Output("page", "children"), Output("steps", "children"), Input("url", "pathname"))
+    @app.callback(Output("page", "children"), Output("steps", "children"), Output("page", "className"),
+                  Input("url", "pathname"))
     def show_page(pathname):
         page = PAGES.get(pathname, strategies)
         current = pathname if pathname in PAGES else "/"
         steps = [dcc.Link(label, href=path, className="step active" if path == current else "step")
                  for path, label in STEPS]
-        return page.layout(), steps
+        # Only the results page (plots to read side by side) uses the full width of a wide screen.
+        return page.layout(), steps, "page wide" if page is results else "page"
 
     for page in PAGES.values():
         page.register(app)
