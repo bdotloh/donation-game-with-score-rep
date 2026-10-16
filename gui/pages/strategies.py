@@ -269,10 +269,8 @@ def unique_name(name, taken):
 
 
 def small_surface(cfg):
-    fig = figures.strategy_surface(spec.build_strategy(cfg), max_score=6)
-    fig.update_layout(height=200, margin=dict(l=0, r=0, t=0, b=0))
-    fig.update_scenes(xaxis_title="receiver", yaxis_title="donor", zaxis_title="p")
-    return fig
+    """The figure on a strategy card: p(help) as a heat map over receiver and donor score."""
+    return figures.strategy_heatmap(spec.build_strategy(cfg), max_score=6)
 
 
 def merged_scores(entries):
@@ -289,12 +287,11 @@ def params_from_experiment(experiment):
     fmt = spec.fmt
     number = validation.parse_number
     return {
-        "shares": [fmt(number(x)) for x in experiment["shares"]],
         "scores": merged_scores(experiment["scores"]),
         "norm": experiment["norm"],
         "noise": {k: fmt(number(experiment["noise"][k])) for k in ("eps", "eps_up", "eps_down")},
         "interactions": {"p_can": fmt(number(experiment.get("p_can", 0.5))), "benefit": fmt(number(experiment["benefit"])),
                          "cost": fmt(number(experiment["cost"]))},
-        "advanced": {**{k: fmt(number(experiment[k])) for k in ("dt", "n_steps", "max_iter", "tol", "resolution")},
+        "advanced": {**{k: fmt(number(experiment[k])) for k in ("max_iter", "tol", "resolution")},
                      "full_steps": bool(experiment.get("full_steps", False))},
     }

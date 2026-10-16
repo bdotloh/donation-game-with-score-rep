@@ -5,11 +5,12 @@ $DONATION_GAME_SAVES), laid out as plain tables so it can be read from anywhere:
 
     run                the name, the date, the number of strategies and the settings as JSON (one row)
     settings           every setting as key / value
-    strategy           the strategies: number (1, 2, 3), label (S1, ...), name, description, initial share
+    strategy           the strategies: number (1, 2, 3), label (S1, ...), name, description
     initial_scores     the initial score distribution
-    points             one row per point on the simplex: kind ('grid' or 'trajectory'), the trajectory step and
-                       time, the shares share_1.., the velocity dRho/dt velocity_1.., the payoffs payoff_1..,
-                       and whether the score chains converged
+    points             one row per point of the arrow grid on the simplex: kind ('grid'), the shares share_1..,
+                       the velocity dRho/dt velocity_1.., the payoffs payoff_1.., and whether the score chains
+                       converged. (Saves made before evolutions were separate from running also hold the
+                       trajectory, kind 'trajectory'; it is loaded when it is there, and no longer written.)
     payoff_matrix      (point_id, strategy, against, value)       A[i, k], pi = A rho
     help_matrix        (point_id, donor, receiver, value)         H[i, k]
     distribution       (point_id, strategy, n_scores, tail_start) how long the score distribution was, and how
@@ -69,10 +70,10 @@ def _pick(column):
 
 SCHEMA = f"""
 CREATE TABLE run (name TEXT NOT NULL, saved TEXT NOT NULL, format INTEGER NOT NULL, n_strategies INTEGER NOT NULL,
-                  at_rest INTEGER NOT NULL, tail_cutoff REAL NOT NULL, experiment TEXT NOT NULL);
+                  tail_cutoff REAL NOT NULL, experiment TEXT NOT NULL);
 CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT NOT NULL);
 CREATE TABLE strategy (strategy INTEGER PRIMARY KEY, label TEXT NOT NULL, name TEXT NOT NULL,
-                       description TEXT NOT NULL, initial_share REAL NOT NULL);
+                       description TEXT NOT NULL);
 CREATE TABLE initial_scores (score INTEGER PRIMARY KEY, mass REAL NOT NULL);
 CREATE TABLE points (point_id INTEGER PRIMARY KEY, kind TEXT NOT NULL CHECK (kind IN ('grid', 'trajectory')),
                      step INTEGER, t REAL, {_columns("share")}, {_columns("velocity")}, {_columns("payoff")},
@@ -163,18 +164,17 @@ def save_run(run, name, folder=None):
 
 
 def _write(run, name, path):
-    experiment, traj, n = run.experiment, run.trajectory, run.n
+    experiment, n = run.experiment, run.n
     with sqlite3.connect(path) as db:
         db.execute(f"PRAGMA application_id = {APPLICATION_ID}")
         db.execute(f"PRAGMA user_version = {FORMAT}")
         db.executescript(SCHEMA)
-        db.execute("INSERT INTO run VALUES (?, ?, ?, ?, ?, ?, ?)",
-                   (name, time.strftime("%Y-%m-%d %H:%M:%S"), FORMAT, n, int(traj.at_rest), TAIL,
-                    json.dumps(experiment)))
+        db.execute("INSERT INTO run VALUES (?, ?, ?, ?, ?, ?)",
+                   (name, time.strftime("%Y-%m-%d %H:%M:%S"), FORMAT, n, TAIL, json.dumps(experiment)))
         db.executemany("INSERT INTO settings VALUES (?, ?)", list(_flat("", {
             k: v for k, v in experiment.items() if k not in ("strategies", "shares", "scores", "version")})))
-        db.executemany("INSERT INTO strategy VALUES (?, ?, ?, ?, ?)", [
-            (i + 1, run.labels[i], cfg["name"], spec.describe_strategy(cfg), float(run.rho0[i]))
+        db.executemany("INSERT INTO strategy VALUES (?, ?, ?, ?)", [
+            (i + 1, run.labels[i], cfg["name"], spec.describe_strategy(cfg))
             for i, cfg in enumerate(experiment["strategies"])])
         db.executemany("INSERT INTO initial_scores VALUES (?, ?)",
                        [(int(e["score"]), float(e["mass"])) for e in experiment["scores"]])
@@ -198,10 +198,6 @@ def _write(run, name, path):
         for r in run.grid_results:
             add_point("grid", None, None, r.rho, r.velocity, r.payoffs, r.converged, r.payoff_matrix, r.help_matrix,
                       r.w)
-        for k in range(len(traj.t)):
-            frame = run.frame(k)
-            add_point("trajectory", k, float(traj.t[k]), frame["rho"], frame["velocity"], frame["payoffs"],
-                      frame["converged"], frame["payoff_matrix"], frame["help_matrix"], frame["w"])
         for rest_id, p in enumerate(run.rest_points, start=1):
             eig = [(float(np.real(e)), float(np.imag(e))) for e in np.atleast_1d(p.eigenvalues)][:2]
             eig += [(None, None)] * (2 - len(eig))
@@ -247,7 +243,9 @@ def load_run(path):
     """A finished Run from a save; SaveError if the file can't be used."""
     db = _connect(path)
     try:
-        experiment_json, n, at_rest = db.execute("SELECT experiment, n_strategies, at_rest FROM run").fetchone()
+        experiment_json, n = db.execute("SELECT experiment, n_strategies FROM run").fetchone()
+        columns = [row[1] for row in db.execute("PRAGMA table_info(run)")]
+        at_rest = db.execute("SELECT at_rest FROM run").fetchone()[0] if "at_rest" in columns else 0   # older saves
         experiment = json.loads(experiment_json)
         error = spec.check(experiment)
         if error:
@@ -298,15 +296,16 @@ def load_run(path):
                    if re is not None][: max(0, n - 1)]
             run.rest_points.append(RestPoint(rho=vector(row, 1), kind=row[4], location=row[5],
                                              eigenvalues=np.array(eig), converged=bool(row[6])))
-        run.trajectory = Trajectory(
-            t=np.array([r[1] for r in traj_rows]), rho=np.array([r[2] for r in traj_rows]),
-            payoffs=np.array([r[3] for r in traj_rows]),
-            w0=np.array([[x[0] for x in wk] for wk in ws]),
-            mean_score=np.array([[np.arange(len(x)) @ x for x in wk] for wk in ws]),
-            scores_converged=np.array([r[4] for r in traj_rows], dtype=bool), strategies=run.strategies,
-            at_rest=bool(at_rest), w=ws)
-        run.trajectory_H = [help_matrix[r[5]] for r in traj_rows]
-        run.trajectory_A = [payoff_matrix[r[5]] for r in traj_rows]
+        if traj_rows:                                    # only in saves made before evolutions were separate
+            run.trajectory = Trajectory(
+                t=np.array([r[1] for r in traj_rows]), rho=np.array([r[2] for r in traj_rows]),
+                payoffs=np.array([r[3] for r in traj_rows]),
+                w0=np.array([[x[0] for x in wk] for wk in ws]),
+                mean_score=np.array([[np.arange(len(x)) @ x for x in wk] for wk in ws]),
+                scores_converged=np.array([r[4] for r in traj_rows], dtype=bool), strategies=run.strategies,
+                at_rest=bool(at_rest), w=ws)
+            run.trajectory_H = [help_matrix[r[5]] for r in traj_rows]
+            run.trajectory_A = [payoff_matrix[r[5]] for r in traj_rows]
     except SaveError:
         raise
     except Exception as error:  # noqa: BLE001  (a damaged file)
@@ -341,6 +340,35 @@ def _path(file, folder):
 
 def delete_save(file, folder=None):
     _path(file, folder).unlink()
+
+
+def rename_save(file, new_name, folder=None):
+    """Give a save a new name (the file is renamed to match); returns the new file name. SaveError if the name
+    can't be used or belongs to another save."""
+    folder = Path(folder or default_folder())
+    path = _path(file, folder)
+    new_name = (new_name or "").strip()
+    target = folder / file_name(new_name)
+    if target != path and target.exists():
+        raise SaveError(f"There is already a save called “{new_name}”. Pick another name.")
+    old_name = read_meta(path)["name"]
+    _set_name(path, new_name)
+    if target != path:
+        try:
+            path.replace(target)
+        except OSError as error:
+            _set_name(path, old_name)
+            raise SaveError(f"The file couldn't be renamed ({error.strerror or type(error).__name__}).") from error
+    return target.name
+
+
+def _set_name(path, name):
+    db = sqlite3.connect(path)
+    try:
+        with db:
+            db.execute("UPDATE run SET name = ?", (name,))
+    finally:
+        db.close()
 
 
 def read_file(file, folder=None):

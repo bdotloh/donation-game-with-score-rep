@@ -62,8 +62,8 @@ def _experiment():
                   {"type": "phi", "name": "phi", "P": None, "tau": None, "phi": 1.0}]
     cn, nc = "00000-00", "00000000"
     return experiment_from_inputs(
-        strategies, ["33.33", "33.33", "33.33"], [{"score": 0, "mass": 0.5}, {"score": 1, "mass": 0.5}],
-        "binary", None, list(cn), list(nc), "0.1", "0.4", "0.6", "0.5", "2", "1", "0.5", "10", "200", "1e-6", "4")
+        strategies, [{"score": 0, "mass": 0.5}, {"score": 1, "mass": 0.5}],
+        "binary", None, list(cn), list(nc), "0.1", "0.4", "0.6", "0.5", "2", "1", "200", "1e-6", "4")
 
 
 def test_experiment_round_trip():
@@ -71,24 +71,21 @@ def test_experiment_round_trip():
     assert error == ""
     assert spec.check(experiment) == ""
     built = spec.build(experiment)
-    np.testing.assert_allclose(built["rho0"], [1 / 3] * 3)
+    assert "shares" not in experiment and "rho0" not in built       # the starting point is chosen on the results page
     np.testing.assert_allclose(built["w_init"], [0.5, 0.5])
     assert built["names"] == ["AllD-Disc", "Defectors", "phi"]
 
 
 def test_experiment_errors():
     strategies = [spec.preset_strategy("AllD-Disc"), spec.preset_strategy("Defectors")]
-    args = [["0.5", "0.5"], [{"score": 0, "mass": 1.0}], "binary", None, list("00000-00"), list("00000000"),
-            "0.1", "0.4", "0.6", "0.5", "2", "1", "0.5", "10", "200", "1e-6", "4"]
+    args = [[{"score": 0, "mass": 1.0}], "binary", None, list("00000-00"), list("00000000"),
+            "0.1", "0.4", "0.6", "0.5", "2", "1", "200", "1e-6", "4"]
     assert experiment_from_inputs(strategies, *args)[1] == ""
     bad = list(args)
-    bad[0] = ["0.5", "0.6"]
-    assert "Shares" in experiment_from_inputs(strategies, *bad)[1]
-    bad = list(args)
-    bad[7] = "0.3"
+    bad[6] = "0.3"
     assert "Noise" in experiment_from_inputs(strategies, *bad)[1]
     bad = list(args)
-    bad[4] = list("-0000000")
+    bad[3] = list("-0000000")
     assert "Norm" in experiment_from_inputs(strategies, *bad)[1]
     assert "2 or 3" in experiment_from_inputs(strategies[:1], *args)[1]
 
@@ -186,14 +183,14 @@ def test_initial_scores_are_capped():
 
 @pytest.mark.parametrize("change", [
     lambda e: [e],                                      # a list, e.g. rest_points.json
-    lambda e: {k: v for k, v in e.items() if k != "n_steps"},
+    lambda e: {k: v for k, v in e.items() if k != "max_iter"},
     lambda e: {k: v for k, v in e.items() if k != "resolution"},
-    lambda e: {**e, "n_steps": "abc"},
+    lambda e: {**e, "max_iter": "abc"},
+    lambda e: {**e, "dt": 0},
     lambda e: {**e, "scores": [{"score": -1, "mass": 1.0}]},
     lambda e: {**e, "scores": [{"score": 10 ** 12, "mass": 1.0}]},
     lambda e: {**e, "benefit": float("nan")},
     lambda e: {**e, "strategies": e["strategies"][:1]},
-    lambda e: {**e, "shares": [0.5, 0.5]},
     lambda e: {**e, "norm": {"type": "ternary", "tau": 2, "CN": "00000000", "NC": "00000000"}},
 ])
 def test_bad_settings_files_are_rejected(change):
@@ -206,10 +203,10 @@ def test_settings_round_trip_keeps_digits():
     from gui.pages.strategies import params_from_experiment
 
     experiment, _ = _experiment()
-    experiment["n_steps"] = 1234567
+    experiment["max_iter"] = 1234567
     experiment["tol"] = 1e-7
     params = params_from_experiment(experiment)
-    assert params["advanced"]["n_steps"] == "1234567"
+    assert params["advanced"]["max_iter"] == "1234567"
     assert validation.parse_number(params["advanced"]["tol"]) == 1e-7
 
 
@@ -263,9 +260,8 @@ def test_absent_strategies_are_left_out():
 def _values(experiment):
     """The parameters page's inputs, in FORM order after the strategies, for an experiment."""
     norm = experiment["norm"]
-    return (["33.33", "33.33", "33.33"], [{"score": 0, "mass": 0.5}, {"score": 1, "mass": 0.5}], norm["type"],
-            norm["tau"], list(norm["CN"]), list(norm["NC"]), "0.1", "0.4", "0.6", "0.5", "2", "1", "0.5", "10", "200",
-            "1e-6", "4")
+    return ([{"score": 0, "mass": 0.5}, {"score": 1, "mass": 0.5}], norm["type"],
+            norm["tau"], list(norm["CN"]), list(norm["NC"]), "0.1", "0.4", "0.6", "0.5", "2", "1", "200", "1e-6", "4")
 
 
 def _text(component):
@@ -291,7 +287,7 @@ def test_results_show_the_strategies():
     assert len(cards) == 3
     text = [_text(c) for c in cards]
     assert [t.split()[0] for t in text] == ["S1", "S2", "S3"]
-    assert "AllD-Disc" in text[0] and "initial share 0.3333" in text[0]
+    assert "AllD-Disc" in text[0] and "initial share" not in text[0]
     assert text[0].count("0.5") == 0 and "score 0" in text[0] and "score ≥1" in text[0]   # the 2x2 decision table
     assert "score 1–2" in text[1] and "score >2" in text[1] and "0.5" in text[1]           # ternary: labels by class
     assert "donor score" in text[2] and "p(help)" in text[2]                               # phi-Disc: by donor score
@@ -310,9 +306,9 @@ def test_note_next_to_the_results_button():
     assert results_note_text(None, experiment["strategies"], *values) == ""
     assert results_note_text(run, experiment["strategies"], *values) == ""          # the same settings
     changed = list(values)
-    changed[6] = "0.2"                                                                 # a different noise
+    changed[5] = "0.2"                                                                 # a different noise
     assert "last run" in results_note_text(run, experiment["strategies"], *changed)
-    changed[6] = "abc"                                                                 # invalid: nothing to say
+    changed[5] = "abc"                                                                 # invalid: nothing to say
     assert results_note_text(run, experiment["strategies"], *changed) == ""
 
 
@@ -359,3 +355,53 @@ def test_results_show_the_score_update_norm():
     assert "score ≥1, declines" in text and "\u22121" in text and "+1" in text
     ternary = _text(norm_view({"type": "ternary", "tau": 3, "CN": "0" * 18, "NC": "0" * 18}))
     assert "18 symbols" in ternary and "score 1\u20133" in ternary and "τ = 3" in ternary
+
+
+def _finished_run():
+    from gui.compute import Run
+
+    experiment, _ = _experiment()
+    run = Run(experiment)
+    run.compute()
+    assert run.state == "done"
+    return run
+
+
+def test_a_run_has_no_trajectory_until_it_is_evolved_from_a_point():
+    run = _finished_run()
+    assert run.trajectory is None and run.evolve_state == "idle" and len(run.figure.data) > 0
+    n_traces = len(run.figure.data)
+    run.evolve(np.array([0.5, 0.3, 0.2]), 3, 0.5)
+    assert run.evolve_state == "done"
+    np.testing.assert_allclose(run.trajectory.rho[0], [0.5, 0.3, 0.2])
+    assert abs(run.trajectory.t[1] - 0.5) < 1e-12                       # the step size given, not the settings'
+    assert len(run.trajectory.t) <= 4 and len(run.trajectory_A) == len(run.trajectory.t)
+    assert len(run.figure.data) > n_traces                              # the trajectory is drawn
+    first = run.evolve_state
+    run.evolve(np.array([0.2, 0.3, 0.5]), 2, 1.0)                       # a new evolution replaces the old one
+    np.testing.assert_allclose(run.trajectory.rho[0], [0.2, 0.3, 0.5])
+    assert first == "done"
+
+
+def test_the_start_point_is_the_selected_point_or_the_selected_step():
+    from gui.pages.results import start_point
+
+    run = _finished_run()
+    assert start_point(run, None) is None
+    assert start_point(run, {"kind": "point", "rho": [0.1, 0.2, 0.7]}) == [0.1, 0.2, 0.7]
+    assert start_point(run, {"kind": "frame", "frame": 0}) is None      # no evolution yet
+    run.evolve(np.array([0.4, 0.4, 0.2]), 2, 1.0)
+    np.testing.assert_allclose(start_point(run, {"kind": "frame", "frame": 1}), run.trajectory.rho[1])
+
+
+def test_the_download_has_a_trajectory_only_after_an_evolution():
+    import io
+    import zipfile
+
+    from gui.pages.results import results_zip
+
+    run = _finished_run()
+    names = zipfile.ZipFile(io.BytesIO(results_zip(run, {"kind": "point", "rho": [0.4, 0.3, 0.3]}))).namelist()
+    assert "trajectory.csv" not in names and "selected_point.json" in names and "vector_field.csv" in names
+    run.evolve(np.array([0.4, 0.3, 0.3]), 2, 1.0)
+    assert "trajectory.csv" in zipfile.ZipFile(io.BytesIO(results_zip(run, {"kind": "frame", "frame": 0}))).namelist()

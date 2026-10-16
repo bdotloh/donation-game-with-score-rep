@@ -110,11 +110,9 @@ python -m gui            # then open http://127.0.0.1:8050
    Cooperators, AllD-Disc, Disc-Disc), fill in p(help) for each decision point
    and add it; the 3D plot shows p(help) over receiver and donor scores. Choose
    2 or 3. They are labelled S1, S2, S3 in that order.
-2. **Parameters**: initial shares (fractions or percentages, e.g. 33.33 three
-   times), initial score distribution, scoring norm (binary or ternary, one
+2. **Parameters**: the initial score distribution, scoring norm (binary or ternary, one
    dropdown per case, a preset, or paste a barcode), noise ε, ε↑, ε↓ (ε↑ + ε↓ = 1),
-   the probability q of being able to help, benefit and cost. Under Advanced: the
-   step size and number of steps of the replicator equation, the number of score
+   the probability q of being able to help, benefit and cost. Under Advanced: the number of score
    iterations, the arrow grid, and whether every score chain runs for all its
    iterations. Defaults: ε = 0.1, ε↑ = ε↓ = 0.5, 2000 score iterations, all of
    them run. With ε↑ = ε↓ many populations have no stable score distribution, so
@@ -122,31 +120,34 @@ python -m gui            # then open http://127.0.0.1:8050
    as JSON.
 3. **Results**: the score update norm comes first, as its barcode with how to read it and tables of the
    score changes; then a card shows the strategies as S1, S2, S3 in the colours of the plots, with their
-   decision tables (p(help) for each class of receiver and donor; φ-Disc by donor score), their
-   initial shares and, if ticked, their p(help) surfaces. Then the simplex (a line for 2 strategies, a triangle for 3) with a
+   decision tables (p(help) for each class of receiver and donor; φ-Disc by donor score) and, if ticked,
+   their p(help) surfaces. Then the simplex (a line for 2 strategies, a triangle for 3) with a
    dense grid of arrows coloured and sized by speed, flow lines through the whole
-   simplex, rest points (black stable, white unstable, gray saddle) and the
-   trajectory from the initial shares. Where only some points' score chains
-   converged, the others' arrows are lighter; a note says when none did. Click
-   the simplex or type shares to see the score distributions (overlaid, one per
-   strategy, plus the population; the x and y ranges can be typed), the payoff matrix and the helping rates
-   there; strategies with share 0 are left out of these. Press Play to step
-   through the trajectory. Figures download as PNG or SVG from each plot's
-   toolbar; "Download data" gives the trajectory, vector field, rest points and
+   simplex and rest points (black stable, white unstable, gray saddle). Where only some points' score chains
+   converged, the others' arrows are lighter; a note says when none did. Nothing is selected at first: click
+   the simplex or type shares and press Show to see the score distributions there (overlaid, one per
+   strategy, plus the population; the x and y ranges can be typed), the payoff matrix and the helping rates;
+   strategies with share 0 are left out of these. **Evolve from point** then evolves the replicator
+   dynamics from the selected point (the step size and number of steps are under Advanced next to the
+   button, defaults 1 and 100): the trajectory is drawn on the simplex from the start point, and Play steps
+   through it. A new evolution replaces the last one. Figures download as PNG or SVG from each plot's
+   toolbar; "Download data" gives the last evolution (if any), the vector field, rest points and
    selected point as CSV/JSON.
 
 The steps at the top are links, so you can move between the pages freely. From Parameters,
 "Current results →" goes back to the results of the last run without running it again (a
 note says if the settings have been changed since); Run starts a new one.
 
-**Saved results.** The Results page can save a finished run under a name, load it back, delete it, download
-it as a file and upload a file saved earlier (a taken name is refused). A save is one SQLite file in
-`saved_results/` (or `$DONATION_GAME_SAVES`), made of plain tables: `points` (one row for every point on the
-simplex and every step of the trajectory, with its shares, velocity dρ/dt, payoffs), `payoff_matrix`,
+**Saved results.** The Results page can save a finished run under a name, load it back, rename it, delete it,
+download it as a file and upload a file saved earlier (a taken name is refused, also when renaming). A save is one SQLite file in
+`saved_results/` (or `$DONATION_GAME_SAVES`), made of plain tables: `points` (one row for every point of the arrow
+grid on the simplex, with its shares, velocity dρ/dt, payoffs), `payoff_matrix`,
 `help_matrix`, `score_distribution` (with `distribution` giving the full length: the far tail, where every
 probability is below 1e-12, is not stored and reads as 0), `rest_points`, `strategy`, `settings` and `run`, plus the
 views `mean_score` and `point_strategy`. Loading brings back the plots without computing them again and puts the
-settings on the Strategies and Parameters pages; a new point clicked on the simplex is still computed. The file
+settings on the Strategies and Parameters pages; a new point clicked on the simplex is still computed, and
+you can evolve from it. Evolutions are not saved (a file made by an earlier version, with a trajectory in it, still
+loads and shows it). The file
 can be read from anywhere:
 
 ```python

@@ -1,4 +1,4 @@
-"""Page 2: initial shares, initial scores, scoring norm, noise and the rest."""
+"""Page 2: initial scores, scoring norm, noise and the rest."""
 
 import json
 
@@ -13,7 +13,6 @@ SYMBOLS = [("−", "-"), ("0", "0"), ("+", "+")]
 
 # Inputs whose values make up an experiment, in the order experiment_from_inputs takes them.
 FORM = [
-    ({"type": "p-share", "index": ALL}, "value"),
     ("p-scores", "data"),
     ("p-norm-type", "value"),
     ("p-norm-tau", "value"),
@@ -25,8 +24,6 @@ FORM = [
     ("p-q", "value"),
     ("p-benefit", "value"),
     ("p-cost", "value"),
-    ("p-dt", "value"),
-    ("p-steps", "value"),
     ("p-maxiter", "value"),
     ("p-tol", "value"),
     ("p-resolution", "value"),
@@ -55,16 +52,14 @@ def actions(has_run=False):
     )
 
 
-def defaults(n):
-    share = f"{1 / n:.4g}"
+def defaults(n=None):
     return {
-        "shares": [share] * n,
         "scores": [{"score": 0, "mass": 0.5}, {"score": 1, "mass": 0.5}],
         "norm": spec.norm_from_barcode(list(spec.NORM_PRESETS.values())[0], "binary"),
         "noise": {"eps": "0.1", "eps_up": "0.5", "eps_down": "0.5"},
         "interactions": {"p_can": "0.5", "benefit": f"{spec.DEFAULT_ADVANCED['benefit']:g}",
                          "cost": f"{spec.DEFAULT_ADVANCED['cost']:g}"},
-        "advanced": {**{k: f"{spec.DEFAULT_ADVANCED[k]:g}" for k in ("dt", "n_steps", "max_iter", "tol", "resolution")},
+        "advanced": {**{k: f"{spec.DEFAULT_ADVANCED[k]:g}" for k in ("max_iter", "tol", "resolution")},
                      "full_steps": spec.DEFAULT_ADVANCED["full_steps"]},
     }
 
@@ -75,32 +70,11 @@ def text_input(id_, value, mode="decimal", width=None):
 
 
 def form(strategies, params):
-    n = len(strategies)
-    base = defaults(n)
+    base = defaults()
     params = {**base, **(params or {})}
-    if len(params["shares"]) != n:
-        params["shares"] = base["shares"]
     norm = usable_norm(params["norm"], base["norm"])
     noise, inter, adv = params["noise"], params["interactions"], params["advanced"]
     return [
-        html.Div(
-            [
-                card("Initial population shares", [
-                    html.Div([field(s["name"], text_input({"type": "p-share", "index": i}, params["shares"][i]))
-                              for i, s in enumerate(strategies)], className="row"),
-                    html.Div(id="p-shares-status"),
-                ]),
-                card("Noise", [
-                    html.Div([
-                        field("ε", text_input("p-eps", noise["eps"])),
-                        field("ε↑", text_input("p-eps-up", noise["eps_up"])),
-                        field("ε↓", text_input("p-eps-down", noise["eps_down"])),
-                    ], className="row"),
-                    html.Div(id="p-noise-status"),
-                ]),
-            ],
-            className="two-col",
-        ),
         html.Div(
             [
                 card("Initial score distribution", [
@@ -113,30 +87,38 @@ def form(strategies, params):
                     html.Div(id="p-score-error", className="status error"),
                     html.Div(id="p-score-table"),
                 ]),
-                card("Interactions", [
-                    html.Div([
-                        field("q", text_input("p-q", inter["p_can"]),
-                              hint="Probability an individual is able to help; a donor meets a receiver with "
-                                   "probability q(1−q) for each order."),
-                        field("Benefit b", text_input("p-benefit", inter["benefit"])),
-                        field("Cost c", text_input("p-cost", inter["cost"])),
-                    ], className="row"),
-                    html.Div(id="p-inter-status"),
-                    html.Details([
-                        html.Summary("Advanced"),
+                html.Div([
+                    card("Noise", [
                         html.Div([
-                            field("Step size dt", text_input("p-dt", adv["dt"])),
-                            field("Steps", text_input("p-steps", adv["n_steps"], mode="numeric")),
-                            field("Max score iterations", text_input("p-maxiter", adv["max_iter"], mode="numeric")),
-                            field("Score tolerance", text_input("p-tol", adv["tol"])),
-                            field("Arrow grid", text_input("p-resolution", adv["resolution"], mode="numeric"),
-                                  hint="Points per side of the simplex."),
-                        ], className="row wrap"),
-                        dcc.Checklist(id="p-full", className="checks",
-                                      options=[{"label": "Run every score chain for all the iterations",
-                                                "value": "full"}],
-                                      value=["full"] if adv.get("full_steps", True) else []),
-                    ], className="advanced"),
+                            field("ε", text_input("p-eps", noise["eps"])),
+                            field("ε↑", text_input("p-eps-up", noise["eps_up"])),
+                            field("ε↓", text_input("p-eps-down", noise["eps_down"])),
+                        ], className="row"),
+                        html.Div(id="p-noise-status"),
+                    ]),
+                    card("Interactions", [
+                        html.Div([
+                            field("q", text_input("p-q", inter["p_can"]),
+                                  hint="Probability an individual is able to help; a donor meets a receiver with "
+                                       "probability q(1−q) for each order."),
+                            field("Benefit b", text_input("p-benefit", inter["benefit"])),
+                            field("Cost c", text_input("p-cost", inter["cost"])),
+                        ], className="row"),
+                        html.Div(id="p-inter-status"),
+                        html.Details([
+                            html.Summary("Advanced"),
+                            html.Div([
+                                field("Max score iterations", text_input("p-maxiter", adv["max_iter"], mode="numeric")),
+                                field("Score tolerance", text_input("p-tol", adv["tol"])),
+                                field("Arrow grid", text_input("p-resolution", adv["resolution"], mode="numeric"),
+                                      hint="Points per side of the simplex."),
+                            ], className="row wrap"),
+                            dcc.Checklist(id="p-full", className="checks",
+                                          options=[{"label": "Run every score chain for all the iterations",
+                                                    "value": "full"}],
+                                          value=["full"] if adv.get("full_steps", True) else []),
+                        ], className="advanced"),
+                    ]),
                 ]),
             ],
             className="two-col",
@@ -220,26 +202,18 @@ def register(app):
         *[Input(i, p) for i, p in FORM],
         prevent_initial_call=True,
     )
-    def remember(shares, scores, norm_type, tau, cn, nc, eps, eps_up, eps_down, q, b, c, dt, steps, maxiter, tol, res,
-                 full):
-        if not shares:
+    def remember(scores, norm_type, tau, cn, nc, eps, eps_up, eps_down, q, b, c, maxiter, tol, res, full):
+        if not cn:
             return no_update
         bits = "".join(cn or [])
         return {
-            "shares": shares,
             "scores": scores or [],
             "norm": {"type": "ternary" if len(bits) == 18 else "binary", "tau": validation.positive_int(tau, "τ")[0],
                      "CN": bits, "NC": "".join(nc or [])},
             "noise": {"eps": eps, "eps_up": eps_up, "eps_down": eps_down},
             "interactions": {"p_can": q, "benefit": b, "cost": c},
-            "advanced": {"dt": dt, "n_steps": steps, "max_iter": maxiter, "tol": tol, "resolution": res,
-                         "full_steps": bool(full)},
+            "advanced": {"max_iter": maxiter, "tol": tol, "resolution": res, "full_steps": bool(full)},
         }
-
-    @app.callback(Output("p-shares-status", "children"), Input({"type": "p-share", "index": ALL}, "value"))
-    def check_shares(values):
-        shares, error = validation.shares(values)
-        return status(error, False) if error else status("Adds up to 1.", True)
 
     @app.callback(Output("p-noise-status", "children"),
                   Input("p-eps", "value"), Input("p-eps-up", "value"), Input("p-eps-down", "value"))
@@ -415,7 +389,7 @@ def register(app):
 
 def results_note_text(run, strategies, *values):
     """Said next to the button back to the results: whether these settings are the ones that were run."""
-    if run is None or not values[0]:
+    if run is None or not values[3]:        # values[3]: the norm bits, empty until the form is built
         return ""
     experiment, error = experiment_from_inputs(strategies, *values)
     if error or experiment == run.experiment:
@@ -436,14 +410,11 @@ def interactions(q, b, c):
     return {"p_can": q_value, "benefit": b_value, "cost": c_value}, ""
 
 
-def experiment_from_inputs(strategies, shares, scores, norm_type, tau, cn, nc, eps, eps_up, eps_down, q, b, c,
-                           dt, steps, maxiter, tol, resolution, full=("full",)):
+def experiment_from_inputs(strategies, scores, norm_type, tau, cn, nc, eps, eps_up, eps_down, q, b, c,
+                           maxiter, tol, resolution, full=("full",)):
     """A validated experiment dict, or the first error message."""
     if not strategies or not 2 <= len(strategies) <= spec.MAX_STRATEGIES:
         return None, "Choose 2 or 3 strategies first."
-    rho, error = validation.shares(shares)
-    if error:
-        return None, f"Shares: {error}"
     w, error = validation.score_distribution(scores or [])
     if error:
         return None, f"Score distribution: {error}"
@@ -464,15 +435,11 @@ def experiment_from_inputs(strategies, shares, scores, norm_type, tau, cn, nc, e
         spec.build_norm(norm)
     except ValueError as error:
         return None, f"Norm: {error}"
-    dt_value, error = validation.non_negative(dt, "The step size")
-    if error or dt_value == 0:
-        return None, error or "The step size must be positive."
     tol_value, error = validation.non_negative(tol, "The tolerance")
     if error:
         return None, error
     numbers = {}
-    for key, value, what in (("n_steps", steps, "Steps"), ("max_iter", maxiter, "Max score iterations"),
-                             ("resolution", resolution, "The arrow grid")):
+    for key, value, what in (("max_iter", maxiter, "Max score iterations"), ("resolution", resolution, "The arrow grid")):
         numbers[key], error = validation.positive_int(value, what)
         if error:
             return None, error
@@ -480,12 +447,10 @@ def experiment_from_inputs(strategies, shares, scores, norm_type, tau, cn, nc, e
     experiment = {
         "version": spec.VERSION,
         "strategies": strategies,
-        "shares": rho.tolist(),
         "scores": [{"score": int(e["score"]), "mass": float(e["mass"]) / total} for e in scores],
         "norm": norm,
         "noise": noise,
         **inter,
-        "dt": dt_value,
         "tol": tol_value,
         **numbers,
         "full_steps": bool(full),

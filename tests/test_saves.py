@@ -13,13 +13,11 @@ from gui.saves import SaveError
 
 def small_run(n=3):
     strategies = [spec.preset_strategy("AllD-Disc"), spec.preset_strategy("Defectors")]
-    shares = ["0.5", "0.5"]
     if n == 3:
         strategies.append({"type": "phi", "name": "phi", "P": None, "tau": None, "phi": 1.0})
-        shares = ["0.4", "0.3", "0.3"]
     experiment, error = experiment_from_inputs(
-        strategies, shares, [{"score": 0, "mass": 0.5}, {"score": 1, "mass": 0.5}], "binary", None,
-        list("00000-0+"), list("00000000"), "0.1", "0.4", "0.6", "0.5", "2", "1", "0.5", "6", "60", "1e-5", "3")
+        strategies, [{"score": 0, "mass": 0.5}, {"score": 1, "mass": 0.5}], "binary", None,
+        list("00000-0+"), list("00000000"), "0.1", "0.4", "0.6", "0.5", "2", "1", "60", "1e-5", "3")
     assert error == ""
     run = Run(experiment)
     run.compute()
@@ -48,17 +46,58 @@ def test_round_trip_restores_the_numbers(run, tmp_path):
     for a, b in zip(loaded.rest_points, run.rest_points):
         np.testing.assert_array_equal(a.rho, b.rho)
         np.testing.assert_allclose(a.eigenvalues, b.eigenvalues)
-    t, u = loaded.trajectory, run.trajectory
+    assert loaded.trajectory is None                  # evolutions from a point are not saved
+    assert len(loaded.figure.data) == len(run.figure.data)
+
+
+def test_an_evolution_is_not_saved(run, tmp_path):
+    evolved = Run(run.experiment)
+    evolved.grid, evolved.grid_results, evolved.rest_points = run.grid, run.grid_results, run.rest_points
+    evolved.evolve(np.full(run.n, 1 / run.n), 3, 1.0)
+    assert evolved.evolve_state == "done" and len(evolved.trajectory.t) >= 2
+    evolved.state = "done"
+    path = saves.save_run(evolved, "evolved", tmp_path)
+    assert sqlite3.connect(path).execute("select count(*) from points where kind = 'trajectory'").fetchone()[0] == 0
+    assert saves.load_run(path).trajectory is None
+
+
+def test_a_save_with_a_trajectory_from_before_still_loads(run, tmp_path):
+    """Saves written when a run always evolved from the initial shares hold the trajectory as kind 'trajectory'
+    points (and have the columns at_rest and initial_share); it is read when it is there."""
+    evolved = Run(run.experiment)
+    evolved.evolve(np.full(run.n, 1 / run.n), 3, 1.0)
+    traj, n = evolved.trajectory, run.n
+    path = saves.save_run(run, "legacy", tmp_path)
+    db = sqlite3.connect(path)
+    db.execute("ALTER TABLE run ADD COLUMN at_rest INTEGER NOT NULL DEFAULT 0")
+    db.execute("UPDATE run SET at_rest = ?", (int(traj.at_rest),))
+    point_id = db.execute("SELECT max(point_id) FROM points").fetchone()[0]
+    for k in range(len(traj.t)):
+        point_id += 1
+        frame = evolved.frame(k)
+        db.execute("INSERT INTO points VALUES (?, 'trajectory', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                   (point_id, k, float(traj.t[k]), *saves._share_columns(frame["rho"]),
+                    *saves._share_columns(frame["velocity"]), *saves._share_columns(frame["payoffs"]),
+                    int(frame["converged"])))
+        db.executemany("INSERT INTO payoff_matrix VALUES (?, ?, ?, ?)",
+                       [(point_id, i + 1, j + 1, float(frame["payoff_matrix"][i][j])) for i in range(n) for j in range(n)])
+        db.executemany("INSERT INTO help_matrix VALUES (?, ?, ?, ?)",
+                       [(point_id, i + 1, j + 1, float(frame["help_matrix"][i][j])) for i in range(n) for j in range(n)])
+        info, scores = saves._distribution_rows(point_id, frame["w"])
+        db.executemany("INSERT INTO distribution VALUES (?, ?, ?, ?)", info)
+        db.executemany("INSERT INTO score_distribution VALUES (?, ?, ?, ?)", scores)
+    db.commit()
+    db.close()
+    loaded = saves.load_run(path)
+    t = loaded.trajectory
     for field in ("t", "rho", "payoffs", "scores_converged"):
-        np.testing.assert_array_equal(getattr(t, field), getattr(u, field))
-    np.testing.assert_allclose(t.w0, u.w0, atol=1e-12)
-    np.testing.assert_allclose(t.mean_score, u.mean_score, atol=1e-5)
-    assert t.at_rest == u.at_rest and len(t.w) == len(u.w)
+        np.testing.assert_array_equal(getattr(t, field), getattr(traj, field))
+    np.testing.assert_allclose(t.w0, traj.w0, atol=1e-12)
+    assert t.at_rest == traj.at_rest
     for k in (0, len(t.t) - 1):
         for key in ("rho", "payoffs", "payoff_matrix", "help_matrix"):
-            np.testing.assert_array_equal(np.asarray(loaded.frame(k)[key]), np.asarray(run.frame(k)[key]))
-        assert np.abs(loaded.frame(k)["w"] - run.frame(k)["w"]).max() < 1e-12
-    assert len(loaded.figure.data) == len(run.figure.data)
+            np.testing.assert_array_equal(np.asarray(loaded.frame(k)[key]), np.asarray(evolved.frame(k)[key]))
+    assert len(loaded.figure.data) > len(run.figure.data)                # the trajectory is drawn too
 
 
 def test_a_loaded_run_still_computes_new_points(run, tmp_path):
@@ -74,9 +113,9 @@ def test_the_file_is_plain_tables_that_can_be_queried(run, tmp_path):
     tables = {r[0] for r in db.execute("select name from sqlite_master where type = 'table'")}
     assert {"run", "settings", "strategy", "initial_scores", "points", "payoff_matrix", "help_matrix", "distribution",
             "score_distribution", "rest_points"} <= tables
-    grid, steps = len(run.grid_results), len(run.trajectory.t)
+    grid, steps = len(run.grid_results), 0
     assert db.execute("select count(*) from points where kind = 'grid'").fetchone()[0] == grid
-    assert db.execute("select count(*) from points where kind = 'trajectory'").fetchone()[0] == steps
+    assert db.execute("select count(*) from points").fetchone()[0] == grid
     assert db.execute("select count(*) from payoff_matrix").fetchone()[0] == (grid + steps) * n * n
     assert db.execute("select count(*) from help_matrix").fetchone()[0] == (grid + steps) * n * n
     assert db.execute("select count(*) from distribution").fetchone()[0] == (grid + steps) * n
@@ -87,12 +126,13 @@ def test_the_file_is_plain_tables_that_can_be_queried(run, tmp_path):
     assert vertices[0] >= 2
     # the views
     first = db.execute("select point_id, strategy, share, payoff, mean_score, share_at_score_0 from point_strategy "
-                       "where kind = 'trajectory' and step = 0 order by strategy").fetchall()
+                       "where point_id = 1 order by strategy").fetchall()
+    point = run.grid_results[0]
     assert len(first) == n and abs(sum(r[2] for r in first) - 1) < 1e-9
-    frame = run.frame(0)
-    np.testing.assert_allclose([r[3] for r in first], frame["payoffs"])
-    np.testing.assert_allclose([r[4] for r in first], [np.arange(len(x)) @ x for x in frame["w"]], atol=1e-5)
-    np.testing.assert_allclose([r[5] for r in first], [x[0] for x in frame["w"]], atol=1e-12)
+    np.testing.assert_allclose([r[2] for r in first], point.rho)
+    np.testing.assert_allclose([r[3] for r in first], point.payoffs)
+    np.testing.assert_allclose([r[4] for r in first], [np.arange(len(x)) @ x for x in point.w], atol=1e-5)
+    np.testing.assert_allclose([r[5] for r in first], [x[0] for x in point.w], atol=1e-12)
     # a score distribution stops where the tail starts, and the full length is recorded
     n_scores, tail_start, stored = db.execute(
         "select d.n_scores, d.tail_start, (select count(*) from score_distribution s "
@@ -167,7 +207,7 @@ def test_csv_export(run, tmp_path):
     z = zipfile.ZipFile(io.BytesIO(saves.export_csv("export.sqlite", tmp_path)))
     assert sorted(z.namelist()) == sorted(f"{t}.csv" for t in saves.EXPORTED)
     rows = list(csv.DictReader(io.StringIO(z.read("points.csv").decode())))
-    assert len(rows) == len(run.grid_results) + len(run.trajectory.t) and "share_1" in rows[0]
+    assert len(rows) == len(run.grid_results) and "share_1" in rows[0]
     assert len(list(csv.DictReader(io.StringIO(z.read("point_strategy.csv").decode())))) == len(rows) * run.n
 
 
@@ -198,3 +238,32 @@ def test_files_that_are_not_saves_are_refused(run, tmp_path):
     with pytest.raises(SaveError):
         saves.import_file(b"x" * 100, tmp_path / "up")
     assert not any(p.name.endswith(".partial") for p in (tmp_path / "up").iterdir())
+
+
+def test_renaming_a_save(run, tmp_path):
+    saves.save_run(run, "first name", tmp_path)
+    saves.save_run(run, "other", tmp_path)
+    assert saves.rename_save("first_name.sqlite", "  Second name ", tmp_path) == "Second_name.sqlite"
+    assert not (tmp_path / "first_name.sqlite").exists()
+    assert sorted(s["name"] for s in saves.list_saves(tmp_path)) == ["Second name", "other"]
+    loaded = saves.load_run(tmp_path / "Second_name.sqlite")
+    np.testing.assert_array_equal(loaded.grid, run.grid)
+    assert sqlite3.connect(tmp_path / "Second_name.sqlite").execute("select name from run").fetchone()[0] == "Second name"
+    # the name of another save is refused, and nothing changes
+    with pytest.raises(SaveError, match="already a save"):
+        saves.rename_save("Second_name.sqlite", "other", tmp_path)
+    assert sorted(s["name"] for s in saves.list_saves(tmp_path)) == ["Second name", "other"]
+    assert saves.rename_save("Second_name.sqlite", "Second.name?", tmp_path) == "Second.name.sqlite"
+    for bad in ("", "   ", "...", "x" * 61, None):
+        with pytest.raises(SaveError):
+            saves.rename_save("other.sqlite", bad, tmp_path)
+    with pytest.raises(SaveError, match="not there"):
+        saves.rename_save("missing.sqlite", "anything", tmp_path)
+    with pytest.raises(SaveError):
+        saves.rename_save("../x.sqlite", "anything", tmp_path)
+
+
+def test_renaming_to_a_spelling_with_the_same_file_name(run, tmp_path):
+    saves.save_run(run, "a b", tmp_path)
+    assert saves.rename_save("a_b.sqlite", "a_b", tmp_path) == "a_b.sqlite"
+    assert [s["name"] for s in saves.list_saves(tmp_path)] == ["a_b"]

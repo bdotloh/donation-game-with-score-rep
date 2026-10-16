@@ -15,6 +15,8 @@ from ..components import GRAPH_CONFIG, card, field, status
 from .strategies import params_from_experiment, small_surface
 
 GRAPHS = ["r-simplex", "r-hist", "r-payoff", "r-help"]
+PLACEHOLDER = html.Div("Click a point on the simplex, or type its shares and press Show; then evolve the dynamics "
+                       "from it.", className="hint")
 
 
 def layout():
@@ -42,6 +44,7 @@ def layout():
             saves_card(),
             dcc.Interval(id="r-poll", interval=400),
             dcc.Interval(id="r-player", interval=120, disabled=True),
+            dcc.Interval(id="r-evolve-poll", interval=400, disabled=True),
             dcc.Store(id="r-selection"),
             html.Div(id="r-progress"),
             html.Div(results_body(), id="r-body", style={"display": "none"}),
@@ -65,6 +68,9 @@ def saves_card():
             html.Button("Load", id="r-load", className="secondary", n_clicks=0),
             html.Button("Delete", id="r-delete", className="link", n_clicks=0),
             dcc.ConfirmDialog(id="r-confirm-delete", message=""),
+            field("Rename the chosen save to", dcc.Input(id="r-rename-name", type="text", placeholder="a new name",
+                                                         maxLength=saves.MAX_NAME)),
+            html.Button("Rename", id="r-rename", className="secondary", n_clicks=0),
         ], className="row bottom"),
         html.Div([
             html.Button("Download file", id="r-download-file", className="secondary", n_clicks=0),
@@ -78,7 +84,8 @@ def saves_card():
         html.Div(f"Saves are SQLite files in the folder {saves.default_folder()}/ (next to where the GUI was started): "
                  "tables of the points on the simplex with their shares, velocities, payoffs, payoff and helping "
                  "matrices and score distributions, which any Python (sqlite3, pandas) or R can read. A save brings "
-                 "back the plots, rest points and trajectory without computing them again, with all its settings. "
+                 "back the plots and rest points without computing them again, with all its settings (evolutions from a "
+                 "point are not saved). "
                  "The far tail of each score distribution (probabilities below 1e-12) is not stored.",
                  className="hint"),
     ])
@@ -105,11 +112,27 @@ def results_body():
                     html.Div(id="r-composition-error"),
                     html.Hr(),
                     html.Div([
-                        html.Button("▶ Play", id="r-play", className="primary", n_clicks=0),
-                        html.Span(id="r-time", className="time"),
+                        html.Button("Evolve from point", id="r-evolve", className="primary", n_clicks=0,
+                                    disabled=True),
+                        html.Span(id="r-evolve-status", className="time"),
                     ], className="row"),
-                    dcc.Slider(id="r-frame", min=0, max=1, step=1, value=0, marks=None, updatemode="drag"),
-                    html.Div(id="r-summary"),
+                    html.Details([
+                        html.Summary("Advanced"),
+                        html.Div([
+                            field("Step size dt", dcc.Input(id="r-dt", type="text", inputMode="decimal",
+                                                            value=f"{spec.DEFAULT_ADVANCED['dt']:g}", className="num")),
+                            field("Steps", dcc.Input(id="r-steps", type="text", inputMode="numeric",
+                                                     value=f"{spec.DEFAULT_ADVANCED['n_steps']:g}", className="num")),
+                        ], className="row wrap"),
+                    ], className="advanced"),
+                    html.Div([
+                        html.Div([
+                            html.Button("▶ Play", id="r-play", className="primary", n_clicks=0),
+                            html.Span(id="r-time", className="time"),
+                        ], className="row"),
+                        dcc.Slider(id="r-frame", min=0, max=1, step=1, value=0, marks=None, updatemode="drag"),
+                    ], id="r-player-box", style={"display": "none"}),
+                    html.Div(PLACEHOLDER, id="r-summary"),
                 ], className="card side"),
             ],
             className="results-top",
@@ -148,12 +171,16 @@ def register(app):
         Output("r-show-strategies", "options"),
         Output("r-show-strategies", "value"),
         Output("r-selection", "data"),
+        Output("r-player-box", "style"),
+        Output("r-dt", "value"),
+        Output("r-steps", "value"),
+        Output("r-evolve-status", "children"),
         Input("r-poll", "n_intervals"),
         State("store-run", "data"),
     )
     def poll(_, run_id):
         run = RUNS.get(run_id)
-        nothing = (no_update,) * 7                      # the outputs after the first three
+        nothing = (no_update,) * 11                     # the outputs after the first three
         if run is None:
             message = html.P(["Nothing has been run yet. ", html.A("Set the parameters", href="/parameters"), "."])
             return (message, {"display": "none"}, True) + nothing
@@ -169,21 +196,22 @@ def register(app):
         if not converged.any():
             note.append("The score chains don't converge anywhere here (no stable score distribution), so all "
                         "values are those after the set number of score iterations.")
-        elif not converged.all() or not run.trajectory.scores_converged.all():
+        elif not converged.all():
             note.append("Lighter arrows: the score chains didn't converge within the maximum number of iterations, "
                         "so values there depend on that maximum and on the initial scores.")
-        if run.trajectory.at_rest:
-            note.append(f"The trajectory reached a rest point at t = {run.trajectory.t[-1]:g}.")
         composition = [field(f"{label} · {name}",
                              dcc.Input(id={"type": "r-share", "index": i}, type="text", inputMode="decimal",
-                                       value=f"{run.rho0[i]:.4g}", className="num"))
+                                       value="", className="num"))
                        for i, (label, name) in enumerate(zip(run.labels, run.names))]
         options = ([{"label": f"{l} · {n}", "value": n} for l, n in zip(run.labels, run.names)]
                    + [{"label": "population", "value": "population"}])
         values = [o["value"] for o in options]
-        selection = {"kind": "frame", "frame": 0}
-        return (None, {}, True, fig, " ".join(note), composition, len(run.trajectory.t) - 1, options, values,
-                selection)
+        trajectory = run.trajectory                 # only a save made before evolutions were separate has one
+        selection = None if trajectory is None else {"kind": "frame", "frame": 0}
+        player = {"display": "none"} if trajectory is None else {}
+        return (None, {}, True, fig, " ".join(note), composition, 1 if trajectory is None else len(trajectory.t) - 1,
+                options, values, selection, player, f"{run.experiment.get('dt', spec.DEFAULT_ADVANCED['dt']):g}",
+                f"{run.experiment.get('n_steps', spec.DEFAULT_ADVANCED['n_steps']):g}", "")
 
     @app.callback(
         Output("r-strategies", "children"),
@@ -204,6 +232,7 @@ def register(app):
         Output("r-composition-error", "children"),
         Output("r-player", "disabled", allow_duplicate=True),
         Output("r-play", "children", allow_duplicate=True),
+        Output({"type": "r-share", "index": ALL}, "value"),
         Input("r-simplex", "clickData"),
         Input("r-show", "n_clicks"),
         Input("r-frame", "value"),
@@ -213,20 +242,21 @@ def register(app):
     )
     def select(click, show, frame, shares, player_disabled):
         trigger = ctx.triggered_id
+        keep = [no_update] * len(shares)             # a wildcard output takes a list, one value per share box
         if trigger == "r-frame":
-            return {"kind": "frame", "frame": frame}, None, no_update, no_update
+            return {"kind": "frame", "frame": frame}, None, no_update, no_update, keep
         pause = (True, "▶ Play")
         if trigger == "r-show":
             rho, error = validation.shares(shares)
             if error:
-                return no_update, status(error, False), no_update, no_update
-            return ({"kind": "point", "rho": rho.tolist()}, None) + pause
+                return no_update, status(error, False), no_update, no_update, keep
+            return ({"kind": "point", "rho": rho.tolist()}, None) + pause + (keep,)
         if trigger == "r-simplex" and click:
             rho = click_composition(click)
             if rho is None:
-                return no_update, None, no_update, no_update
-            return ({"kind": "point", "rho": rho}, None) + pause
-        return no_update, None, no_update, no_update
+                return no_update, None, no_update, no_update, keep
+            return ({"kind": "point", "rho": rho}, None) + pause + ([f"{x:.4g}" for x in rho],)
+        return no_update, None, no_update, no_update, keep
 
     @app.callback(
         Output("r-hist", "figure"),
@@ -247,13 +277,15 @@ def register(app):
     )
     def show_selection(selection, shown, xmin, xmax, ymin, ymax, run_id):
         run = RUNS.get(run_id)
-        if run is None or run.state != "done" or not selection:
+        if run is None or run.state != "done":
             return (no_update,) * 7
+        if not selection:                            # nothing selected yet: empty panels and a hint
+            return {}, {}, {}, PLACEHOLDER, "", no_update, ""
         x_range, y_range, range_error = axis_ranges(xmin, xmax, ymin, ymax)
-        if selection["kind"] == "frame":
+        if selection["kind"] == "frame" and run.trajectory is not None:
             state = run.frame(min(selection["frame"], len(run.trajectory.t) - 1))
         else:
-            state = run.point(selection["rho"])
+            state = run.point(selection["rho"] if selection["kind"] == "point" else run.frame(0)["rho"])
         shown = shown or []
         p = present(state["rho"])                    # strategies with share 0 are left out of these panels
         names, labels = [run.names[i] for i in p], [run.labels[i] for i in p]
@@ -273,6 +305,73 @@ def register(app):
         else:
             patch["data"][-1]["x"], patch["data"][-1]["y"] = [state["rho"][1]], [0]
         return hist, payoff, help_, summary(run, state, p), time, patch, status(range_error, False)
+
+    @app.callback(
+        Output("r-evolve", "disabled"),
+        Input("r-selection", "data"),
+        Input("r-evolve-poll", "disabled"),
+        State("store-run", "data"),
+    )
+    def evolve_button(selection, poll_disabled, run_id):
+        """Evolving needs a selected point, and only one evolution runs at a time."""
+        run = RUNS.get(run_id)
+        return not selection or run is None or run.evolve_state == "running"
+
+    @app.callback(
+        Output("r-evolve-poll", "disabled"),
+        Output("r-evolve-status", "children", allow_duplicate=True),
+        Input("r-evolve", "n_clicks"),
+        State("r-selection", "data"),
+        State("r-steps", "value"),
+        State("r-dt", "value"),
+        State("store-run", "data"),
+        prevent_initial_call=True,
+    )
+    def evolve(n_clicks, selection, steps, dt, run_id):
+        run = RUNS.get(run_id)
+        if not n_clicks or run is None or run.state != "done":
+            return no_update, no_update
+        rho = start_point(run, selection)
+        if rho is None:
+            return no_update, status("Select a point first: click the simplex, or type its shares and press Show.",
+                                     False)
+        n_steps, error = validation.positive_int(steps, "Steps")
+        if error:
+            return no_update, status(error, False)
+        dt_value, error = validation.non_negative(dt, "The step size")
+        if error or dt_value == 0:
+            return no_update, status(error or "The step size must be positive.", False)
+        if not run.start_evolve(rho, n_steps, dt_value):
+            return no_update, no_update
+        return False, "Evolving…"
+
+    @app.callback(
+        Output("r-evolve-poll", "disabled", allow_duplicate=True),
+        Output("r-evolve-status", "children", allow_duplicate=True),
+        Output("r-simplex", "figure", allow_duplicate=True),
+        Output("r-frame", "max"),
+        Output("r-frame", "value", allow_duplicate=True),
+        Output("r-player-box", "style", allow_duplicate=True),
+        Output("r-selection", "data", allow_duplicate=True),
+        Input("r-evolve-poll", "n_intervals"),
+        State("store-run", "data"),
+        prevent_initial_call=True,
+    )
+    def evolve_poll(_, run_id):
+        run = RUNS.get(run_id)
+        nothing = (no_update,) * 5
+        if run is None or run.evolve_state == "idle":
+            return (True, no_update) + nothing
+        if run.evolve_state == "running":
+            bar = html.Progress(value=f"{run.evolve_progress:.3f}", max="1")
+            return (no_update, bar) + nothing
+        if run.evolve_state == "error":
+            return (True, status(f"The evolution failed: {run.evolve_error}", False)) + nothing
+        t = run.trajectory
+        message = f"Evolved {len(t.t) - 1} steps to t = {t.t[-1]:g}."
+        if t.at_rest:
+            message += " It reached a rest point."
+        return (True, message, run.figure, len(t.t) - 1, 0, {}, {"kind": "frame", "frame": 0})
 
     @app.callback(
         Output("r-player", "disabled"),
@@ -419,6 +518,27 @@ def register_saves(app):
 
 
     @app.callback(
+        Output("r-save-status", "children", allow_duplicate=True),
+        Output("r-load-choice", "options", allow_duplicate=True),
+        Output("r-load-choice", "value", allow_duplicate=True),
+        Output("r-rename-name", "value"),
+        Input("r-rename", "n_clicks"),
+        State("r-load-choice", "value"),
+        State("r-rename-name", "value"),
+        prevent_initial_call=True,
+    )
+    def rename(n_clicks, choice, new_name):
+        if not n_clicks:
+            return (no_update,) * 4
+        if not choice:
+            return status("Choose a saved result to rename.", False), no_update, no_update, no_update
+        try:
+            file = saves.rename_save(choice, new_name)
+        except ValueError as error:
+            return status(str(error), False), no_update, no_update, no_update
+        return status(f"Renamed to “{new_name.strip()}”.", True), save_options(), file, ""
+
+    @app.callback(
         Output("r-save-download", "data"),
         Output("r-save-status", "children", allow_duplicate=True),
         Input("r-download-file", "n_clicks"),
@@ -454,6 +574,17 @@ def register_saves(app):
         except ValueError as error:
             return status(str(error), False), no_update, no_update
         return status("Added to the saved results. Press Load to open it.", True), save_options(), name
+
+
+def start_point(run, selection):
+    """The shares of the selected point (for a step of an evolution, the shares at that step), or None."""
+    if not selection:
+        return None
+    if selection["kind"] == "point":
+        return selection["rho"]
+    if run.trajectory is None:
+        return None
+    return run.frame(min(selection["frame"], len(run.trajectory.t) - 1))["rho"].tolist()
 
 
 def click_composition(click):
@@ -508,14 +639,14 @@ def norm_view(norm):
 
 
 def strategy_cards(run, surfaces=False):
-    """One card per strategy of the run: its label and colour, name, initial share and what it does."""
+    """One card per strategy of the run: its label and colour, name and what it does."""
     cards = []
     for i, cfg in enumerate(run.experiment["strategies"]):
         color = figures.COLORS[i]
         children = [
             html.Div([html.Span(run.labels[i], className="chip", style={"background": color}), html.B(cfg["name"])],
                      className="strategy-head"),
-            html.Div(f"{spec.describe_strategy(cfg)} · initial share {run.rho0[i]:.4g}", className="hint"),
+            html.Div(spec.describe_strategy(cfg), className="hint"),
             strategy_table(cfg),
         ]
         if surfaces:
@@ -598,19 +729,20 @@ def summary(run, state, shown=None):
 
 
 def results_zip(run, selection):
-    """Settings, trajectory, vector field, rest points and the selected point, as CSV/JSON in a zip."""
+    """Settings, the last evolution, vector field, rest points and the selected point, as CSV/JSON in a zip."""
     names = run.labels                     # column names S1, S2, S3; settings.json has the strategies
     buffer = io.BytesIO()
     with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as z:
         z.writestr("settings.json", json.dumps(run.experiment, indent=2))
         t = run.trajectory
-        cols = (["t"] + [f"share_{n}" for n in names] + [f"payoff_{n}" for n in names]
-                + [f"w0_{n}" for n in names] + [f"mean_score_{n}" for n in names] + ["scores_converged"])
-        lines = [",".join(cols)]
-        for k in range(len(t.t)):
-            row = [t.t[k], *t.rho[k], *t.payoffs[k], *t.w0[k], *t.mean_score[k], int(t.scores_converged[k])]
-            lines.append(",".join(f"{x:.10g}" for x in row))
-        z.writestr("trajectory.csv", "\n".join(lines))
+        if t is not None:                  # only after an evolution from a point
+            cols = (["t"] + [f"share_{n}" for n in names] + [f"payoff_{n}" for n in names]
+                    + [f"w0_{n}" for n in names] + [f"mean_score_{n}" for n in names] + ["scores_converged"])
+            lines = [",".join(cols)]
+            for k in range(len(t.t)):
+                row = [t.t[k], *t.rho[k], *t.payoffs[k], *t.w0[k], *t.mean_score[k], int(t.scores_converged[k])]
+                lines.append(",".join(f"{x:.10g}" for x in row))
+            z.writestr("trajectory.csv", "\n".join(lines))
         lines = [",".join([f"share_{n}" for n in names] + [f"velocity_{n}" for n in names]
                           + [f"payoff_{n}" for n in names] + ["scores_converged"])]
         for p, r in zip(run.grid, run.grid_results):
@@ -618,7 +750,8 @@ def results_zip(run, selection):
         z.writestr("vector_field.csv", "\n".join(lines))
         z.writestr("rest_points.json", json.dumps(run.rest_point_dicts(), indent=2, default=str))
         if selection:
-            state = run.frame(selection["frame"]) if selection["kind"] == "frame" else run.point(selection["rho"])
+            state = (run.frame(selection["frame"]) if selection["kind"] == "frame" and run.trajectory is not None
+                     else run.point(selection["rho"] if selection["kind"] == "point" else run.frame(0)["rho"]))
             z.writestr("selected_point.json", json.dumps({
                 "strategies": dict(zip(run.labels, run.names)),
                 "share": list(state["rho"]),

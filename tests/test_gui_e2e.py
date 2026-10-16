@@ -120,13 +120,27 @@ def _full_flow(page):
     page.wait_for_selector("#s-tau-row:not([style*='none'])")
     page.wait_for_selector(".cell input >> nth=8")
     assert page.locator(".cell input").count() == 9
-    for k, value in enumerate(["0", "0", "0", "0", "1", "0.5", "0", "1", "1"]):
-        set_text(page, f".cell input >> nth={k}", value)
+    wanted = ["0", "0", "0", "0", "1", "0.5", "0", "1", "1"]
+    for _ in range(4):          # a callback that redraws the grid can overwrite a value typed just before: retype
+        for k, value in enumerate(wanted):
+            if page.input_value(f".cell input >> nth={k}") != value:
+                set_text(page, f".cell input >> nth={k}", value)
+        page.wait_for_load_state("networkidle")
+        if [page.input_value(f".cell input >> nth={k}") for k in range(9)] == wanted:
+            break
     set_text(page, "#s-name", "Ternary")
     page.wait_for_load_state("networkidle")            # the preview has to catch up with what was typed
     page.wait_for_function("!document.querySelector('#s-add').disabled")
-    page.click("#s-add")
-    page.wait_for_selector(".selected-item >> nth=2")
+    for _ in range(9):                      # a click on Add is now and then lost, or slow to show: click again
+        if page.locator(".selected-item").count() >= 3:
+            break
+        if not page.locator("#s-add").is_disabled():
+            page.click("#s-add")
+        try:
+            page.wait_for_selector(".selected-item >> nth=2", timeout=10_000)
+        except playwright.TimeoutError:
+            pass
+    page.wait_for_selector(".selected-item >> nth=2", timeout=10_000)
     assert "0,0,0|0,g,0.5|0,g,g (tau=2)" in page.inner_text(".selected-item >> nth=2")   # stored as typed
     assert page.locator("#s-add").is_disabled()           # at most 3
     shot(page, "1_strategies")
@@ -134,9 +148,8 @@ def _full_flow(page):
 
     # Page 2: parameters.
     page.wait_for_selector("#p-norm-grid table")
-    for k in range(3):
-        set_text(page, f"input[id*='p-share'] >> nth={k}", "33.33")
-    page.wait_for_selector("#p-shares-status .status.ok")
+    assert page.locator("input[id*='p-share']").count() == 0          # the starting point is chosen on the results page
+    assert page.locator("#p-steps").count() == 0 and page.locator("#p-dt").count() == 0
     set_text(page, "#p-score", "2")
     set_text(page, "#p-mass", "0.2")
     page.click("#p-add-score")
@@ -167,7 +180,6 @@ def _full_flow(page):
     set_text(page, "#p-eps-down", "0.6")
     page.wait_for_function("document.querySelector('#p-noise-status').innerText === ''")
     page.click(".advanced summary")
-    set_text(page, "#p-steps", "15")
     set_text(page, "#p-maxiter", "300")
     set_text(page, "#p-resolution", "4")
     set_text(page, "#p-tol", "1e-5")
@@ -178,6 +190,10 @@ def _full_flow(page):
     page.wait_for_selector("#r-body:not([style*='none'])", timeout=600_000)
     page.wait_for_selector("#r-simplex .main-svg")
     page.wait_for_selector("#r-hist .main-svg")
+    # Nothing is selected and nothing has been evolved yet.
+    assert "Click a point" in page.inner_text("#r-summary")
+    assert page.is_disabled("#r-evolve") and not page.is_visible("#r-play")
+    assert page.locator("input[id*='r-share']").first.input_value() == ""
     shot(page, "3_results")
     before = page.inner_text("#r-summary")
     set_text(page, "input[id*='r-share'] >> nth=0", "0.6")
@@ -197,6 +213,18 @@ def _full_flow(page):
     before = page.inner_text("#r-summary")
     click_plot(page, "#r-simplex .nsewdrag", 0.5, 0.55)                  # inside the triangle
     page.wait_for_function(f"document.querySelector('#r-summary').innerText !== {before!r}", timeout=120_000)
+    assert page.locator("input[id*='r-share'] >> nth=0").input_value() != ""     # a click fills in its shares
+    page.wait_for_function("!document.querySelector('#r-evolve').disabled")
+    assert not page.is_visible("#r-play")
+    # Evolve from the clicked point: the step size and number of steps are under Advanced, next to the button.
+    assert page.get_by_role("button", name="Evolve from point").is_visible()
+    assert not page.is_visible("#r-steps")
+    page.click(".advanced summary")
+    set_text(page, "#r-steps", "6")
+    set_text(page, "#r-dt", "1")
+    page.click("#r-evolve")
+    page.wait_for_selector("#r-play", state="visible", timeout=600_000)
+    page.wait_for_function("document.querySelector('#r-evolve-status').innerText.startsWith('Evolved')")
     page.click("#r-play")
     time.sleep(1.5)
     assert "t =" in page.inner_text("#r-time")
@@ -261,15 +289,21 @@ def test_two_strategies_from_settings_file(page, server, tmp_path):
         page.wait_for_selector("#s-upload input[type=file]", state="attached")
         page.set_input_files("#s-upload input[type=file]", str(path))
         page.wait_for_selector("#p-norm-grid table")
-        assert page.input_value("#p-barcode") == "CN:00000-0+ NC:00000000"
+        page.wait_for_function("document.querySelector('#p-barcode').value === 'CN:00000-0+ NC:00000000'")
         page.click("#p-run")
         page.wait_for_selector("#r-body:not([style*='none'])", timeout=600_000)
         page.wait_for_selector("#r-simplex .main-svg")
-        page.wait_for_function("document.querySelector('#r-time').innerText.startsWith('t =')")
+        assert "Click a point" in page.inner_text("#r-summary")
         before = page.inner_text("#r-summary")
         click_plot(page, "#r-simplex .nsewdrag >> nth=-1", 0.3, 0.5)    # the line panel
         page.wait_for_function("document.querySelector('#r-time').innerText === 'selected point'", timeout=120_000)
         assert page.inner_text("#r-summary") != before
+        page.wait_for_function("!document.querySelector('#r-evolve').disabled")
+        page.click(".advanced summary")
+        set_text(page, "#r-steps", "5")
+        page.click("#r-evolve")
+        page.wait_for_selector("#r-play", state="visible", timeout=600_000)
+        page.wait_for_function("document.querySelector('#r-time').innerText.startsWith('t =')")
         shot(page, "5_two_strategies")
         assert not page.errors, page.errors
     except Exception:
@@ -341,16 +375,24 @@ def test_save_and_load_results(page, server, tmp_path, monkeypatch):
         assert "CN:00000-0+" in page.inner_text("#r-norm")
         # Its settings are on the parameters page again.
         page.click("a.step:has-text('Parameters')")
-        page.wait_for_selector("#p-barcode")
-        assert page.input_value("#p-barcode") == "CN:00000-0+ NC:00000000"
-        # Delete it.
+        page.wait_for_function("document.querySelector('#p-barcode') && "
+                               "document.querySelector('#p-barcode').value === 'CN:00000-0+ NC:00000000'")
+        # Rename it (a name is needed), then delete it.
         page.click("a.step:has-text('Results')")
         page.locator("#r-load-choice").click()
         page.get_by_role("option", name=re.compile("^my run")).last.click()
+        page.click("#r-rename")
+        page.wait_for_selector("#r-save-status .status.error")
+        set_text(page, "#r-rename-name", "renamed run")
+        page.click("#r-rename")
+        page.wait_for_function("document.querySelector('#r-save-status').innerText.includes('Renamed')")
+        assert (tmp_path / "renamed_run.sqlite").exists() and not (tmp_path / "my_run.sqlite").exists()
+        page.locator("#r-load-choice").click()
+        page.get_by_role("option", name=re.compile("^renamed run")).last.click()
         page.once("dialog", lambda dialog: dialog.accept())
         page.click("#r-delete")
         page.wait_for_function("document.querySelector('#r-save-status').innerText.includes('Deleted')")
-        assert not (tmp_path / "my_run.sqlite").exists()
+        assert not (tmp_path / "renamed_run.sqlite").exists()
         # Upload the downloaded file: it comes back under its own name (a taken name is refused; see test_saves.py).
         page.set_input_files("#r-upload input[type=file]", str(tmp_path / "downloaded.sqlite"))
         page.wait_for_function("document.querySelector('#r-save-status').innerText.includes('Added')")

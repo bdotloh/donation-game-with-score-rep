@@ -2,9 +2,11 @@
 
 strategy: {"type": "binary" | "ternary" | "phi", "name": str, "P": [[p, ...], ...], "tau": int, "phi": float}
 norm:     {"type": "binary" | "ternary", "tau": int, "CN": "8 or 18 of -0+", "NC": "..."}
-experiment: {"version": 1, "strategies": [...], "shares": [...], "scores": [{"score", "mass"}, ...],
-             "norm": {...}, "noise": {"eps", "eps_up", "eps_down"}, "p_can", "benefit", "cost", "dt",
-             "n_steps", "max_iter", "tol", "resolution", "full_steps"}
+experiment: {"version": 1, "strategies": [...], "scores": [{"score", "mass"}, ...],
+             "norm": {...}, "noise": {"eps", "eps_up", "eps_down"}, "p_can", "benefit", "cost",
+             "max_iter", "tol", "resolution", "full_steps"}
+(older files also hold "shares", "dt" and "n_steps"; the starting point, step size and number of steps of an
+evolution are now chosen on the results page, and "dt" and "n_steps" here only set its defaults.)
 full_steps: run every score chain for max_iter steps instead of stopping at the tolerance.
 """
 
@@ -118,7 +120,7 @@ def w_init(scores):
 
 
 def build(experiment):
-    """Engine objects for an experiment: strategies, rho0, w_init, ReplicatorDynamics."""
+    """Engine objects for an experiment: strategies, w_init, ReplicatorDynamics."""
     strategies = [build_strategy(s) for s in experiment["strategies"]]
     norm = build_norm(experiment["norm"])
     noise = Noise(**experiment["noise"])
@@ -126,11 +128,10 @@ def build(experiment):
     solver = StableScoreSolver(norm, noise, tol=experiment["tol"], max_iter=experiment["max_iter"], role_factor=roles,
                                force_max_iter=bool(experiment.get("full_steps", False)), tail_tol=TAIL_TOL)
     payoffs = Payoffs(benefit=experiment["benefit"], cost=experiment["cost"], role_factor=roles)
-    dynamics = ReplicatorDynamics(solver, payoffs, dt=experiment["dt"])
+    dynamics = ReplicatorDynamics(solver, payoffs, dt=experiment.get("dt", DEFAULT_ADVANCED["dt"]))
     return {
         "strategies": strategies,
         "names": [s["name"] for s in experiment["strategies"]],
-        "rho0": np.asarray(experiment["shares"], dtype=float),
         "w_init": w_init(experiment["scores"]),
         "dynamics": dynamics,
     }
@@ -160,9 +161,6 @@ def check(experiment):
                 return "φ must be a number, 0 or more."
             if s["type"] != "phi" and any(validation.probability(p)[1] for row in s.get("P") or [] for p in row):
                 return "Each p(help) must be a number between 0 and 1."
-        shares, error = validation.shares(experiment["shares"])
-        if error or len(shares) != len(strategies):
-            return error or "There must be one share per strategy."
         scores = experiment["scores"]
         if not isinstance(scores, list) or not all(isinstance(e, dict) for e in scores):
             return "The score distribution is not valid."
@@ -178,10 +176,13 @@ def check(experiment):
         for key in ("benefit", "cost", "tol"):
             if validation.non_negative(experiment[key], key)[1]:
                 return f"{key} must be a number, 0 or more."
-        dt = validation.parse_number(experiment["dt"])
-        if dt is None or dt <= 0:
-            return "The step size must be positive."
+        if "dt" in experiment:
+            dt = validation.parse_number(experiment["dt"])
+            if dt is None or dt <= 0:
+                return "The step size must be positive."
         for key in ("n_steps", "max_iter", "resolution"):
+            if key not in experiment and key == "n_steps":
+                continue
             if validation.positive_int(experiment[key], key)[1]:
                 return f"{key} must be a whole number, 1 or more."
         build(experiment)
