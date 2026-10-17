@@ -445,3 +445,21 @@ def test_the_solver_settings_are_not_on_the_parameters_page_but_are_kept():
     assert experiment_from_inputs(strategies, *args, {"max_iter": "x"})[1]
     form_ids = [i if isinstance(i, str) else str(i) for i, _ in parameters.FORM]
     assert not any(i in form_ids for i in ("p-maxiter", "p-tol", "p-resolution", "p-full"))
+
+
+def test_the_simplex_names_each_strategy_and_its_code():
+    from gui.compute import Run
+
+    run = _finished_run()                                                   # three strategies: a triangle
+    text = " ".join(a.text for a in run.figure.layout.annotations)
+    for cfg in run.experiment["strategies"]:
+        assert cfg["name"] in text and spec.strategy_code(cfg) in text
+    assert "CN:00000-00 NC:00000000" in text                                # the norm's barcode, top left
+    assert spec.strategy_code(spec.preset_strategy("AllD-Disc")) == "0,0|0,g"
+    assert spec.strategy_code({"type": "phi", "name": "p", "P": None, "tau": None, "phi": 1.5}) == "φ-Disc φ=1.5"
+    experiment, _ = _experiment()
+    experiment["strategies"] = experiment["strategies"][:2]
+    two = Run(experiment)
+    two.compute()                                                           # two strategies: a line, codes on its ends
+    ticks = " ".join(two.figure.layout.xaxis.ticktext)
+    assert "AllD-Disc" in ticks and "0,0|0,g" in ticks and "Defectors" in ticks and "0,0|0,0" in ticks

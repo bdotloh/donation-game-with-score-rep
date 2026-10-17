@@ -275,13 +275,14 @@ LINE_HEIGHT = 360           # the simplex of two strategies
 
 
 def simplex_figure(names, grid, velocities, converged, rest_points, trajectory=None, current=None, click_resolution=60,
-                   labels=None, flow=True, barcode=None):
+                   labels=None, flow=True, barcode=None, codes=None):
     """The simplex (a line for 2 strategies, a triangle for 3) with velocity arrows and rest points.
 
     grid: (m, n) points, velocities: (m, n), converged: (m,) bools, rest_points: list of
     {"rho", "kind", "eigenvalues", "converged"}, trajectory: (T, n) or None, current: (n,) or None.
     labels: short labels (default S1, S2, S3), shown with the names at the corners. flow: draw
-    flow lines (triangle only). barcode: text for the top left corner (the scoring norm). The last trace is the
+    flow lines (triangle only). barcode: text for the top left corner (the scoring norm). codes: each
+    strategy's code (e.g. 0,0|0,g), written under its name. The last trace is the
     current point, so it can be moved with a Patch.
     """
     n = len(names)
@@ -290,12 +291,13 @@ def simplex_figure(names, grid, velocities, converged, rest_points, trajectory=N
     hover = [_hover_point(r, v, c, labels) for r, v, c in zip(grid, velocities, converged)]
     if not converged.any():
         converged = np.ones_like(converged)     # fading every arrow would say nothing; the note says it
+    codes = codes or [""] * n
     if n == 2:
         fig = _line_figure(names, labels, grid, velocities, converged, rest_points, trajectory, current, hover,
-                           click_resolution)
+                           click_resolution, codes)
     else:
         fig = _triangle_figure(names, labels, grid, velocities, converged, rest_points, trajectory, current, hover,
-                               click_resolution, flow)
+                               click_resolution, flow, codes)
     if barcode:
         fig.add_annotation(text=barcode, xref="paper", yref="paper", x=0, y=1, xanchor="left", yanchor="top",
                            showarrow=False, align="left", font=dict(family="monospace", size=12, color="#333"))
@@ -303,7 +305,7 @@ def simplex_figure(names, grid, velocities, converged, rest_points, trajectory=N
 
 
 def _triangle_figure(names, labels, grid, velocities, converged, rest_points, trajectory, current, hover,
-                     click_resolution, flow):
+                     click_resolution, flow, codes):
     fig = go.Figure()
     # Invisible dense layer that makes every part of the triangle clickable.
     k = click_resolution
@@ -334,23 +336,25 @@ def _triangle_figure(names, labels, grid, velocities, converged, rest_points, tr
                                  marker=dict(symbol="square", size=9, color="#C0392B"), hoverinfo="skip"))
     for t in _rest_trace(rest_points, to_xy, labels):
         fig.add_trace(t)
-    pad = 0.07
-    corners = [(0, -pad), (1, -pad), (0.5, SQRT3_2 + pad)]
-    for label, name, (x, y) in zip(labels, names, corners):
-        fig.add_annotation(x=x, y=y, text=f"<b>{label}</b><br><span style='font-size:11px;color:#555'>{name}</span>",
-                           showarrow=False, font=dict(size=15))
+    pad = 0.035
+    corners = [(0, -pad, "top"), (1, -pad, "top"), (0.5, SQRT3_2 + pad, "bottom")]    # text clear of the vertex
+    for label, name, code, (x, y, anchor) in zip(labels, names, codes, corners):
+        text = f"<b>{label}</b><br><span style='font-size:11px;color:#555'>{name}</span>"
+        if code:
+            text += f"<br><span style='font-size:11px;font-family:monospace;color:#555'>{code}</span>"
+        fig.add_annotation(x=x, y=y, text=text, showarrow=False, yanchor=anchor, font=dict(size=15))
     cx, cy = to_xy(current) if current is not None else ([None], [None])
     fig.add_trace(go.Scatter(x=cx, y=cy, mode="markers", name="selected",
                              marker=dict(symbol="x", size=12, color="#C0392B", line=dict(width=1, color="white")),
                              hoverinfo="skip"))
     fig.update_xaxes(visible=False, range=[-0.1, 1.1])
-    fig.update_yaxes(visible=False, range=[-0.14, SQRT3_2 + 0.13], scaleanchor="x", scaleratio=1)
-    return _layout(fig, height=560, hovermode="closest", clickmode="event",
+    fig.update_yaxes(visible=False, range=[-0.2, SQRT3_2 + 0.2], scaleanchor="x", scaleratio=1)
+    return _layout(fig, height=580, hovermode="closest", clickmode="event", margin=dict(l=70, r=70, t=40, b=40),
                    legend=dict(orientation="h", y=-0.02, x=0.5, xanchor="center"))
 
 
 def _line_figure(names, labels, grid, velocities, converged, rest_points, trajectory, current, hover,
-                 click_resolution):
+                 click_resolution, codes):
     """Two strategies: the simplex is a line, x = share of the second strategy, with arrows and rest points on it."""
     fig = go.Figure()
     x = grid[:, 1]
@@ -377,12 +381,15 @@ def _line_figure(names, labels, grid, velocities, converged, rest_points, trajec
     fig.add_trace(go.Scatter(x=cx, y=[0] if current is not None else [None], mode="markers", name="selected",
                              marker=dict(symbol="x", size=12, color="#C0392B"), hoverinfo="skip"))
     fig.update_yaxes(visible=False, range=[-0.6, 0.6])
-    fig.update_xaxes(range=[-0.05, 1.05],
-                     title_text=f"share of {labels[1]}   ({labels[0]}: {names[0]},  {labels[1]}: {names[1]})",
-                     tickvals=[0, 0.25, 0.5, 0.75, 1],
-                     ticktext=[f"all {labels[0]}", "0.25", "0.5", "0.75", f"all {labels[1]}"])
+    def end(label, name, code):                       # the end of the line: which strategy it is
+        return f"<b>all {label}</b><br>{name}" + (f"<br><span style='font-family:monospace'>{code}</span>" if code else "")
+
+    fig.update_xaxes(range=[-0.05, 1.05], title_text=f"share of {labels[1]}",
+                     tickvals=[0, 0.25, 0.5, 0.75, 1], automargin=True,
+                     ticktext=[end(labels[0], names[0], codes[0]), "0.25", "0.5", "0.75",
+                               end(labels[1], names[1], codes[1])])
     return _layout(fig, height=LINE_HEIGHT, hovermode="closest", clickmode="event",
-                   margin=dict(l=40, r=20, t=40, b=40), legend=dict(orientation="h", y=-0.4, x=0.5, xanchor="center"))
+                   margin=dict(l=70, r=70, t=40, b=40), legend=dict(orientation="h", y=-0.62, x=0.5, xanchor="center"))
 
 
 # ---------------------------------------------------------------- scores and matrices
