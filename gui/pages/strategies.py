@@ -145,7 +145,8 @@ def register(app):
         if error:
             return no_update, error, None
         strategy = spec.build_strategy(cfg)
-        return figures.strategy_surface(strategy, min(max_score or 10, 60)), "", cfg
+        return figures.strategy_heatmap(strategy, min(max_score or 10, 60), height=440, font_size=13,
+                                        annotate_up_to=14), "", cfg
 
     @app.callback(
         Output("store-strategies", "data"),
