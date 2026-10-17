@@ -32,6 +32,7 @@ def layout():
                             dcc.RadioItems(id="r-format", value="png", inline=True,
                                            options=[{"label": "PNG", "value": "png"},
                                                     {"label": "SVG", "value": "svg"}]),
+                            html.Button("Save / load results", id="r-saves-open", className="secondary", n_clicks=0),
                             html.Button("Download data", id="r-download-data", className="secondary", n_clicks=0),
                             html.Button("Save settings", id="r-download-settings", className="secondary", n_clicks=0),
                             dcc.Download(id="r-download"),
@@ -41,7 +42,7 @@ def layout():
                 ],
                 className="title-row",
             ),
-            saves_card(),
+            saves_modal(),
             dcc.Interval(id="r-poll", interval=400),
             dcc.Interval(id="r-player", interval=120, disabled=True),
             dcc.Interval(id="r-evolve-poll", interval=400, disabled=True),
@@ -81,80 +82,86 @@ def saves_card():
             html.Span("(of the save chosen above)", className="hint"),
         ], className="row bottom"),
         html.Div(id="r-save-status"),
-        html.Div(f"Saves are SQLite files in the folder {saves.default_folder()}/ (next to where the GUI was started): "
-                 "tables of the points on the simplex with their shares, velocities, payoffs, payoff and helping "
-                 "matrices and score distributions, which any Python (sqlite3, pandas) or R can read. A save brings "
-                 "back the plots and rest points without computing them again, with all its settings (evolutions from a "
-                 "point are not saved). "
-                 "The far tail of each score distribution (probabilities below 1e-12) is not stored.",
-                 className="hint"),
     ])
 
 
+def saves_modal():
+    """The saved results, in a pop-up opened by a button in the toolbar (hidden, not removed, when closed)."""
+    return html.Div([
+        html.Div(id="r-saves-backdrop", className="modal-backdrop", n_clicks=0),
+        html.Div([
+            html.Button("×", id="r-saves-close", className="link modal-close", n_clicks=0, title="Close"),
+            saves_card(),
+        ], className="modal-panel"),
+    ], id="r-saves-modal", className="modal", style={"display": "none"})
+
+
 def results_body():
-    return [
-        card("Score update norm", html.Div(id="r-norm")),
-        card("Strategies", [
-            dcc.Checklist(id="r-surfaces", inline=True, className="checks",
-                          options=[{"label": "Show the p(help) surfaces", "value": "on"}], value=[]),
-            html.Div(id="r-strategies", className="strategy-strip"),
-        ]),
-        html.Div(
-            [
-                card(None, [
-                    dcc.Graph(id="r-simplex", config=GRAPH_CONFIG),
-                    html.Div(id="r-simplex-note", className="note"),
-                ], className="card simplex-card"),
-                card("At the selected point", [
-                    html.Div(id="r-composition", className="row"),
-                    html.Div([html.Button("Show", id="r-show", className="secondary", n_clicks=0),
-                              html.Span("or click the simplex", className="hint")], className="row"),
-                    html.Div(id="r-composition-error"),
-                    html.Hr(),
-                    html.Div([
-                        html.Button("Evolve from point", id="r-evolve", className="primary", n_clicks=0,
-                                    disabled=True),
-                        html.Span(id="r-evolve-status", className="time"),
-                    ], className="row"),
-                    html.Details([
-                        html.Summary("Advanced"),
-                        html.Div([
-                            field("Step size dt", dcc.Input(id="r-dt", type="text", inputMode="decimal",
-                                                            value=f"{spec.DEFAULT_ADVANCED['dt']:g}", className="num")),
-                            field("Steps", dcc.Input(id="r-steps", type="text", inputMode="numeric",
-                                                     value=f"{spec.DEFAULT_ADVANCED['n_steps']:g}", className="num")),
-                        ], className="row wrap"),
-                    ], className="advanced"),
-                    html.Div([
-                        html.Div([
-                            html.Button("▶ Play", id="r-play", className="primary", n_clicks=0),
-                            html.Span(id="r-time", className="time"),
-                        ], className="row"),
-                        dcc.Slider(id="r-frame", min=0, max=1, step=1, value=0, marks=None, updatemode="drag"),
-                    ], id="r-player-box", style={"display": "none"}),
-                    html.Div(PLACEHOLDER, id="r-summary"),
-                ], className="card side"),
-            ],
-            className="results-top",
-        ),
-        card("Score distribution", [
-            dcc.Checklist(id="r-show-strategies", inline=True, className="checks"),
+    selected_point = card("At the selected point", [
+        html.Div(id="r-composition", className="row"),
+        html.Div([html.Button("Show", id="r-show", className="secondary", n_clicks=0),
+                  html.Span("or click the simplex", className="hint")], className="row"),
+        html.Div(id="r-composition-error"),
+        html.Hr(),
+        html.Div([
+            html.Button("Evolve from point", id="r-evolve", className="primary", n_clicks=0, disabled=True),
+            html.Span(id="r-evolve-status", className="time"),
+        ], className="row"),
+        html.Details([
+            html.Summary("Advanced"),
             html.Div([
-                field("x from", dcc.Input(id="r-xmin", type="text", placeholder="auto", inputMode="decimal", className="num")),
-                field("x to", dcc.Input(id="r-xmax", type="text", placeholder="auto", inputMode="decimal", className="num")),
-                field("y from", dcc.Input(id="r-ymin", type="text", placeholder="auto", inputMode="decimal", className="num")),
-                field("y to", dcc.Input(id="r-ymax", type="text", placeholder="auto", inputMode="decimal", className="num")),
-                html.Div(id="r-range-error", className="status error"),
-            ], className="row bottom"),
-            dcc.Graph(id="r-hist", config=GRAPH_CONFIG),
-        ]),
-        html.Div(
-            [
-                card(None, dcc.Graph(id="r-payoff", config=GRAPH_CONFIG)),
-                card(None, dcc.Graph(id="r-help", config=GRAPH_CONFIG)),
-            ],
-            className="two-col",
-        ),
+                field("Step size dt", dcc.Input(id="r-dt", type="text", inputMode="decimal",
+                                                value=f"{spec.DEFAULT_ADVANCED['dt']:g}", className="num")),
+                field("Steps", dcc.Input(id="r-steps", type="text", inputMode="numeric",
+                                         value=f"{spec.DEFAULT_ADVANCED['n_steps']:g}", className="num")),
+            ], className="row wrap"),
+        ], className="advanced"),
+        html.Div([
+            html.Div([
+                html.Button("▶ Play", id="r-play", className="primary", n_clicks=0),
+                html.Span(id="r-time", className="time"),
+            ], className="row"),
+            dcc.Slider(id="r-frame", min=0, max=1, step=1, value=0, marks=None, updatemode="drag"),
+        ], id="r-player-box", style={"display": "none"}),
+        html.Div(PLACEHOLDER, id="r-summary"),
+    ], className="card side")
+    return [
+        # Row 1: the strategies and the scoring norm (can be folded away).
+        html.Details([
+            html.Summary("Strategies and score update norm"),
+            html.Div([
+                card("Strategies", [
+                    dcc.Checklist(id="r-surfaces", inline=True, className="checks",
+                                  options=[{"label": "Show the p(help) surfaces", "value": "on"}], value=[]),
+                    html.Div(id="r-strategies", className="strategy-strip"),
+                ]),
+                card("Score update norm", html.Div(id="r-norm")),
+            ], className="two-col"),
+        ], open=True, className="collapsible"),
+        # Row 2: the simplex and the score distribution.
+        html.Div([
+            card(None, [
+                dcc.Graph(id="r-simplex", config=GRAPH_CONFIG),
+                html.Div(id="r-simplex-note", className="note"),
+            ], className="card simplex-card"),
+            card("Score distribution", [
+                dcc.Checklist(id="r-show-strategies", inline=True, className="checks"),
+                html.Div([
+                    field("x from", dcc.Input(id="r-xmin", type="text", placeholder="auto", inputMode="decimal", className="num")),
+                    field("x to", dcc.Input(id="r-xmax", type="text", placeholder="auto", inputMode="decimal", className="num")),
+                    field("y from", dcc.Input(id="r-ymin", type="text", placeholder="auto", inputMode="decimal", className="num")),
+                    field("y to", dcc.Input(id="r-ymax", type="text", placeholder="auto", inputMode="decimal", className="num")),
+                    html.Div(id="r-range-error", className="status error"),
+                ], className="row bottom"),
+                dcc.Graph(id="r-hist", config=GRAPH_CONFIG),
+            ]),
+        ], className="two-col"),
+        # Row 3: the matrices at the selected point, and the box to choose and evolve from a point.
+        html.Div([
+            card(None, dcc.Graph(id="r-payoff", config=GRAPH_CONFIG)),
+            card(None, dcc.Graph(id="r-help", config=GRAPH_CONFIG)),
+            selected_point,
+        ], className="three-col"),
     ]
 
 
@@ -440,6 +447,20 @@ def register(app):
 
 def register_saves(app):
     @app.callback(
+        Output("r-saves-modal", "style"),
+        Input("r-saves-open", "n_clicks"),
+        Input("r-saves-close", "n_clicks"),
+        Input("r-saves-backdrop", "n_clicks"),
+        prevent_initial_call=True,
+    )
+    def toggle_saves(open_clicks, close_clicks, backdrop_clicks):
+        if ctx.triggered_id == "r-saves-open" and open_clicks:
+            return {}
+        if ctx.triggered_id in ("r-saves-close", "r-saves-backdrop"):
+            return {"display": "none"}
+        return no_update
+
+    @app.callback(
         Output("r-save-status", "children"),
         Output("r-load-choice", "options"),
         Output("r-save-name", "value"),
@@ -465,6 +486,7 @@ def register_saves(app):
         Output("r-save-status", "children", allow_duplicate=True),
         Output("r-poll", "disabled", allow_duplicate=True),
         Output("r-strategies", "children", allow_duplicate=True),
+        Output("r-saves-modal", "style", allow_duplicate=True),
         Input("r-load", "n_clicks"),
         State("r-load-choice", "value"),
         prevent_initial_call=True,
@@ -472,17 +494,17 @@ def register_saves(app):
     def load(n_clicks, choice):
         keep = (no_update,) * 3
         if not n_clicks:
-            return keep + (no_update,) * 3
+            return keep + (no_update,) * 4
         if not choice:
-            return keep + (status("Choose a saved result to load.", False), no_update, no_update)
+            return keep + (status("Choose a saved result to load.", False), no_update, no_update, no_update)
         try:
             run = saves.load_run(saves.default_folder() / Path(choice).name)
         except ValueError as error:
-            return keep + (status(str(error), False), no_update, no_update)
+            return keep + (status(str(error), False), no_update, no_update, no_update)
         experiment = run.experiment
         message = status("Loaded. The parameters page now shows its settings.", True)
         return (RUNS.add(run), experiment["strategies"], params_from_experiment(experiment), message,
-                False, None)                                # polling again draws the loaded run
+                False, None, {"display": "none"})           # polling again draws the loaded run; the pop-up closes
 
     @app.callback(
         Output("r-confirm-delete", "displayed"),
@@ -610,7 +632,6 @@ def norm_view(norm):
     n = 3 if norm["type"] == "ternary" else 2
     labels = spec.class_labels(norm["type"], norm.get("tau"))
     barcode = f"CN:{norm['CN']} NC:{norm['NC']}"
-    classes = ", ".join(f"{k} = score {label}" for k, label in enumerate(labels))
     tables = []
     for rule, title in (("CN", "Donor's score change (CN)"), ("NC", "Receiver's score change (NC)")):
         code = norm[rule]
@@ -628,12 +649,6 @@ def norm_view(norm):
     convention = [
         html.Div([html.Code(barcode, className="barcode-text"),
                   html.Span(f"  τ = {norm['tau']}" if n == 3 else "", className="hint")]),
-        html.Div(
-            f"Reading the barcode: CN and NC are each {2 * n * n} symbols, one for every case, in the order receiver's "
-            f"class, then whether the donor declined or gave, then donor's class (the donor's class changes fastest). "
-            f"CN is the change to the donor's score, NC the change to the receiver's: + adds one, − takes one "
-            f"(a player with score 0 can't lose) and 0 leaves it. Classes: {classes}. "
-            f"Noise ε adds its own ±1 moves on top.", className="hint"),
     ]
     return convention + [html.Div(tables, className="two-col tight")]
 
