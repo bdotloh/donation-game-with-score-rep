@@ -34,6 +34,7 @@ h3 { font-size: 15px; margin: 0 0 12px; }
 .two-col.tight { gap: 24px; }
 
 @media (max-width: 900px) { .two-col { grid-template-columns: 1fr; } }
+.two-col.top { align-items: start; }
 .three-col { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
 @media (max-width: 1100px) { .three-col { grid-template-columns: 1fr; } }
 .collapsible { margin-bottom: 16px; }

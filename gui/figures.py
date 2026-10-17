@@ -271,14 +271,18 @@ def _rest_trace(points, xy, names):
     return traces
 
 
+LINE_HEIGHT = 360           # the simplex of two strategies
+
+
 def simplex_figure(names, grid, velocities, converged, rest_points, trajectory=None, current=None, click_resolution=60,
-                   labels=None, flow=True):
+                   labels=None, flow=True, barcode=None):
     """The simplex (a line for 2 strategies, a triangle for 3) with velocity arrows and rest points.
 
     grid: (m, n) points, velocities: (m, n), converged: (m,) bools, rest_points: list of
     {"rho", "kind", "eigenvalues", "converged"}, trajectory: (T, n) or None, current: (n,) or None.
     labels: short labels (default S1, S2, S3), shown with the names at the corners. flow: draw
-    flow lines (triangle only). The last trace is the current point, so it can be moved with a Patch.
+    flow lines (triangle only). barcode: text for the top left corner (the scoring norm). The last trace is the
+    current point, so it can be moved with a Patch.
     """
     n = len(names)
     labels = labels or default_labels(n)
@@ -287,10 +291,15 @@ def simplex_figure(names, grid, velocities, converged, rest_points, trajectory=N
     if not converged.any():
         converged = np.ones_like(converged)     # fading every arrow would say nothing; the note says it
     if n == 2:
-        return _line_figure(names, labels, grid, velocities, converged, rest_points, trajectory, current, hover,
-                            click_resolution)
-    return _triangle_figure(names, labels, grid, velocities, converged, rest_points, trajectory, current, hover,
-                            click_resolution, flow)
+        fig = _line_figure(names, labels, grid, velocities, converged, rest_points, trajectory, current, hover,
+                           click_resolution)
+    else:
+        fig = _triangle_figure(names, labels, grid, velocities, converged, rest_points, trajectory, current, hover,
+                               click_resolution, flow)
+    if barcode:
+        fig.add_annotation(text=barcode, xref="paper", yref="paper", x=0, y=1, xanchor="left", yanchor="top",
+                           showarrow=False, align="left", font=dict(family="monospace", size=12, color="#333"))
+    return fig
 
 
 def _triangle_figure(names, labels, grid, velocities, converged, rest_points, trajectory, current, hover,
@@ -336,7 +345,7 @@ def _triangle_figure(names, labels, grid, velocities, converged, rest_points, tr
                              hoverinfo="skip"))
     fig.update_xaxes(visible=False, range=[-0.1, 1.1])
     fig.update_yaxes(visible=False, range=[-0.14, SQRT3_2 + 0.13], scaleanchor="x", scaleratio=1)
-    return _layout(fig, height=600, hovermode="closest", clickmode="event",
+    return _layout(fig, height=560, hovermode="closest", clickmode="event",
                    legend=dict(orientation="h", y=-0.02, x=0.5, xanchor="center"))
 
 
@@ -367,20 +376,20 @@ def _line_figure(names, labels, grid, velocities, converged, rest_points, trajec
     cx = [current[1]] if current is not None else [None]
     fig.add_trace(go.Scatter(x=cx, y=[0] if current is not None else [None], mode="markers", name="selected",
                              marker=dict(symbol="x", size=12, color="#C0392B"), hoverinfo="skip"))
-    fig.update_yaxes(visible=False, range=[-1, 1])
+    fig.update_yaxes(visible=False, range=[-0.6, 0.6])
     fig.update_xaxes(range=[-0.05, 1.05],
                      title_text=f"share of {labels[1]}   ({labels[0]}: {names[0]},  {labels[1]}: {names[1]})",
                      tickvals=[0, 0.25, 0.5, 0.75, 1],
                      ticktext=[f"all {labels[0]}", "0.25", "0.5", "0.75", f"all {labels[1]}"])
-    return _layout(fig, height=300, hovermode="closest", clickmode="event",
-                   legend=dict(orientation="h", y=-0.45, x=0.5, xanchor="center"))
+    return _layout(fig, height=LINE_HEIGHT, hovermode="closest", clickmode="event",
+                   margin=dict(l=40, r=20, t=40, b=40), legend=dict(orientation="h", y=-0.4, x=0.5, xanchor="center"))
 
 
 # ---------------------------------------------------------------- scores and matrices
 
 
 def score_histogram(names, rho, w, hidden=(), show_marginal=True, labels=None, colors=None, x_range=(None, None),
-                    y_range=(None, None)):
+                    y_range=(None, None), height=380):
     """Conditional score distributions w[i] for each strategy (overlaid, semi-transparent), and the
     population's marginal sum_i rho_i w[i]. x_range and y_range are (low, high) with None for automatic."""
     labels = labels or default_labels(len(names))
@@ -428,7 +437,7 @@ def score_histogram(names, rho, w, hidden=(), show_marginal=True, labels=None, c
                       yaxis=y_axis,
                       yaxis2=dict(overlaying="y", range=[0, 1], visible=False, fixedrange=True),
                       legend=dict(orientation="h", y=1.08, x=0, xanchor="left"))
-    return _layout(fig, height=380, hovermode="closest")
+    return _layout(fig, height=height, hovermode="closest")
 
 
 def matrix_heatmap(M, names, title, row_title, col_title, diverging=False, fmt=".3f"):
