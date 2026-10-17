@@ -93,6 +93,13 @@ def describe_strategy(cfg):
     return f"{'ternary' if cfg['type'] == 'ternary' else 'binary'}: {text}"
 
 
+def strategy_code(cfg):
+    """A strategy's code on its own, e.g. 0,0|0,g (φ-Disc: φ-Disc φ=1); the cards and the simplex show it."""
+    if cfg["type"] == "phi":
+        return f"φ-Disc φ={cfg['phi']:g}"
+    return build_strategy(cfg).name
+
+
 def build_norm(cfg):
     barcode = f"CN:{cfg['CN']} NC:{cfg['NC']}"
     if cfg["type"] == "ternary":

@@ -68,7 +68,14 @@ class Run:
             self.names, self.grid, [r.velocity for r in self.grid_results],
             [r.converged for r in self.grid_results], self.rest_point_dicts(),
             trajectory=None if self.trajectory is None else self.trajectory.rho,
-            current=None if self.trajectory is None else self.trajectory.rho[0], labels=self.labels)
+            current=None if self.trajectory is None else self.trajectory.rho[0], labels=self.labels,
+            barcode=self.barcode(), codes=[spec.strategy_code(s) for s in self.experiment["strategies"]])
+
+    def barcode(self):
+        """The scoring norm as text, e.g. CN:00000-00 NC:00000000 (with τ for a ternary norm)."""
+        norm = self.experiment["norm"]
+        text = f"CN:{norm['CN']} NC:{norm['NC']}"
+        return text + (f"  τ = {norm['tau']}" if norm["type"] == "ternary" else "")
 
     def _progress(self, start, end, total=None):
         def report(done, total_=total):

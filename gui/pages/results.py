@@ -147,15 +147,15 @@ def results_body():
             card("Score distribution", [
                 dcc.Checklist(id="r-show-strategies", inline=True, className="checks"),
                 html.Div([
-                    field("x from", dcc.Input(id="r-xmin", type="text", placeholder="auto", inputMode="decimal", className="num")),
-                    field("x to", dcc.Input(id="r-xmax", type="text", placeholder="auto", inputMode="decimal", className="num")),
-                    field("y from", dcc.Input(id="r-ymin", type="text", placeholder="auto", inputMode="decimal", className="num")),
-                    field("y to", dcc.Input(id="r-ymax", type="text", placeholder="auto", inputMode="decimal", className="num")),
+                    field("x from", dcc.Input(id="r-xmin", type="text", placeholder="auto", inputMode="decimal", className="num"), className="field inline"),
+                    field("to", dcc.Input(id="r-xmax", type="text", placeholder="auto", inputMode="decimal", className="num"), className="field inline"),
+                    field("y from", dcc.Input(id="r-ymin", type="text", placeholder="auto", inputMode="decimal", className="num"), className="field inline"),
+                    field("to", dcc.Input(id="r-ymax", type="text", placeholder="auto", inputMode="decimal", className="num"), className="field inline"),
                     html.Div(id="r-range-error", className="status error"),
-                ], className="row bottom"),
+                ], className="row"),
                 dcc.Graph(id="r-hist", config=GRAPH_CONFIG),
             ]),
-        ], className="two-col"),
+        ], className="two-col top"),
         # Row 3: the matrices at the selected point, and the box to choose and evolve from a point.
         html.Div([
             card(None, dcc.Graph(id="r-payoff", config=GRAPH_CONFIG)),
@@ -299,7 +299,8 @@ def register(app):
         hidden = [n for n in names if n not in shown]
         hist = figures.score_histogram(names, np.asarray(state["rho"])[p], np.asarray(state["w"])[p], hidden=hidden,
                                        labels=labels, colors=[figures.COLORS[i] for i in p],
-                                       show_marginal="population" in shown, x_range=x_range, y_range=y_range)
+                                       show_marginal="population" in shown, x_range=x_range, y_range=y_range,
+                                       height=480 if run.n == 3 else 300)      # about as tall as the simplex card
         payoff = figures.matrix_heatmap(np.asarray(state["payoff_matrix"])[np.ix_(p, p)], labels,
                                         "Payoff matrix A  (π = Aρ)", "strategy", "against", diverging=True)
         help_ = figures.matrix_heatmap(np.asarray(state["help_matrix"])[np.ix_(p, p)], labels, "Helping rates H",
