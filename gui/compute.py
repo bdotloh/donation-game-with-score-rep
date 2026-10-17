@@ -1,9 +1,10 @@
-"""Running an experiment: the vector field, rest points and trajectory, in a background thread.
+"""Running an experiment: the vector field and rest points, and evolutions from chosen points, in background threads.
 
 Results stay in this process (the GUI is a local, single-user app); the browser only
 holds the run id. Score distributions are kept as numpy arrays here.
 """
 
+import copy
 import threading
 import uuid
 
@@ -23,7 +24,6 @@ class Run:
         self.names = built["names"]
         self.labels = [f"S{i + 1}" for i in range(len(self.names))]
         self.strategies = built["strategies"]
-        self.rho0 = built["rho0"]
         self.w_init = built["w_init"]
         self.dynamics = built["dynamics"]
         self.field = ReplicatorField(self.dynamics, self.strategies, self.w_init)
@@ -32,7 +32,12 @@ class Run:
         self.progress = 0.0
         self.message = "Starting…"
         self.error = ""
-        self.grid = self.grid_results = self.rest_points = self.trajectory = self.figure = None
+        self.grid = self.grid_results = self.rest_points = self.figure = None
+        self.trajectory = None                  # set by an evolution (or by a save made before evolutions were separate)
+        self.trajectory_H = self.trajectory_A = None
+        self.evolve_state = "idle"              # idle, running, done or error
+        self.evolve_progress = 0.0
+        self.evolve_error = ""
         self._points = {}
 
     # ------------------------------------------------------------ computation
@@ -42,19 +47,14 @@ class Run:
             self.message = "Computing arrows…"
             resolution = self.experiment["resolution"]
             self.grid = simplex_grid(self.n, resolution if self.n == 3 else 2 * resolution)
-            self.grid_results = self.field.evaluate_many(self.grid, progress=self._progress(0.0, 0.5))
+            self.grid_results = self.field.evaluate_many(self.grid, progress=self._progress(0.0, 0.9))
             self.message = "Finding rest points…"
             velocities = [r.velocity for r in self.grid_results]
             self.rest_points = find_rest_points(self.field.velocity, self.n, grid=self.grid,
                                                 grid_velocities=velocities,
                                                 grid_converged=[r.converged for r in self.grid_results],
                                                 neutral_tol=10 * self.experiment["tol"])
-            self.progress = 0.65
-            self.message = "Evolving the replicator equation…"
-            n_steps = self.experiment["n_steps"]
-            self.trajectory = self.dynamics.run(self.strategies, self.rho0, self.w_init, n_steps, record_scores=True,
-                                                progress=self._progress(0.65, 1.0, n_steps + 1))
-            self._trajectory_matrices()
+            self.progress = 0.95
             self.message = "Drawing the phase portrait…"
             self.draw()
             self.state = "done"
@@ -67,20 +67,48 @@ class Run:
         self.figure = figures.simplex_figure(
             self.names, self.grid, [r.velocity for r in self.grid_results],
             [r.converged for r in self.grid_results], self.rest_point_dicts(),
-            trajectory=self.trajectory.rho, current=self.trajectory.rho[0], labels=self.labels)
+            trajectory=None if self.trajectory is None else self.trajectory.rho,
+            current=None if self.trajectory is None else self.trajectory.rho[0], labels=self.labels)
 
     def _progress(self, start, end, total=None):
         def report(done, total_=total):
             self.progress = start + (end - start) * done / max(1, total_)
         return report
 
-    def _trajectory_matrices(self):
+    def start_evolve(self, rho, n_steps, dt):
+        """Evolve the shares from rho in a thread (False if one is already running). The trajectory replaces
+        the previous one when it is done."""
+        if self.evolve_state == "running":
+            return False
+        self.evolve_state, self.evolve_progress, self.evolve_error = "running", 0.0, ""
+        threading.Thread(target=self.evolve, args=(np.asarray(rho, dtype=float), n_steps, dt), daemon=True).start()
+        return True
+
+    def evolve(self, rho, n_steps, dt):
+        try:
+            dynamics = copy.copy(self.dynamics)
+            dynamics.dt = dt
+
+            def report(done, total):
+                self.evolve_progress = done / max(1, total)
+
+            trajectory = dynamics.run(self.strategies, rho, self.w_init, n_steps, record_scores=True, progress=report)
+            matrices = self._trajectory_matrices(trajectory)
+            self.trajectory, (self.trajectory_H, self.trajectory_A) = trajectory, matrices
+            self.draw()
+            self.evolve_state = "done"
+        except Exception as error:  # shown to the user
+            self.evolve_state = "error"
+            self.evolve_error = f"{type(error).__name__}: {error}"
+
+    def _trajectory_matrices(self, trajectory):
         payoffs = self.dynamics.payoffs
-        self.trajectory_H, self.trajectory_A = [], []
-        for rho, w in zip(self.trajectory.rho, self.trajectory.w):
+        helping, payoff_matrices = [], []
+        for rho, w in zip(trajectory.rho, trajectory.w):
             population = Population(self.strategies, rho)
-            self.trajectory_H.append(payoffs.help_probabilities(population, w))
-            self.trajectory_A.append(self.dynamics.payoff_matrix(population, w))
+            helping.append(payoffs.help_probabilities(population, w))
+            payoff_matrices.append(self.dynamics.payoff_matrix(population, w))
+        return helping, payoff_matrices
 
     # ------------------------------------------------------------ queries
 

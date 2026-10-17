@@ -22,7 +22,8 @@ body { margin: 0; background: var(--bg); color: var(--text);
 a.step:hover { color: var(--accent); }
 .step.active { color: var(--accent); font-weight: 600; }
 
-.page { max-width: 1280px; margin: 0 auto; padding: 20px 28px 60px; }
+.page { max-width: 1400px; margin: 0 auto; padding: 20px 28px 60px; }
+.page.wide { max-width: min(96vw, 2200px); }
 h1 { font-size: 22px; margin: 6px 0 4px; }
 h3 { font-size: 15px; margin: 0 0 12px; }
 .lead { color: var(--muted); margin: 0 0 16px; }
@@ -33,6 +34,7 @@ h3 { font-size: 15px; margin: 0 0 12px; }
 .two-col.tight { gap: 24px; }
 .results-top { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 16px; }
 @media (max-width: 900px) { .two-col, .results-top { grid-template-columns: 1fr; } }
+@media (min-width: 1600px) { .page.wide .results-top { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); } }
 
 .field { display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px; min-width: 90px; }
 .field.inline { flex-direction: row; align-items: center; gap: 8px; }
@@ -101,6 +103,7 @@ table.summary { width: 100%; }
 
 .strategy-strip { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-top: 8px; }
 @media (max-width: 900px) { .strategy-strip { grid-template-columns: 1fr; } }
+@media (min-width: 1600px) { .strategy-strip { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
 .strategy-card { border: 1px solid var(--line); border-left-width: 4px; border-radius: 8px; padding: 10px 12px; min-width: 0; }
 .strategy-head { display: flex; align-items: center; gap: 8px; margin-bottom: 2px; flex-wrap: wrap; }
 .chip { color: white; font-weight: 600; font-size: 12px; border-radius: 10px; padding: 1px 8px; }
