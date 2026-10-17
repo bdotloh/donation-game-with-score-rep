@@ -240,6 +240,23 @@ def _full_flow(page):
     page.get_by_text("Show the p(help) surfaces").click()
     page.wait_for_selector(".strategy-card .mini .main-svg >> nth=2")
     shot(page, "4b_strategies")
+    # The first row (strategies and norm) can be folded away.
+    page.click("summary:has-text('Strategies and score update norm')")
+    page.wait_for_selector(".strategy-card >> nth=0", state="hidden")
+    assert not page.is_visible("#r-norm")
+    page.click("summary:has-text('Strategies and score update norm')")
+    page.wait_for_selector(".strategy-card >> nth=0", state="visible")
+    # Rows: strategies and norm side by side; simplex and score distribution side by side below them;
+    # then the two matrices and the box with the selected point.
+    box = lambda selector: page.locator(selector).bounding_box()
+    strategies, norm = box(".card:has(#r-strategies)"), box(".card:has(#r-norm)")
+    simplex, hist = box(".card:has(#r-simplex)"), box(".card:has(#r-hist)")
+    payoff, helping, chosen = box(".card:has(#r-payoff)"), box(".card:has(#r-help)"), box(".card:has(#r-evolve)")
+    assert abs(strategies["y"] - norm["y"]) < 2 and strategies["x"] < norm["x"]
+    assert abs(simplex["y"] - hist["y"]) < 2 and simplex["x"] < hist["x"]
+    assert simplex["y"] > strategies["y"] + strategies["height"] - 2
+    assert abs(payoff["y"] - helping["y"]) < 2 and abs(payoff["y"] - chosen["y"]) < 2
+    assert payoff["x"] < helping["x"] < chosen["x"] and payoff["y"] > simplex["y"] + min(simplex["height"], hist["height"]) - 2
 
     # Back to the parameters and on to the same results again, by the button and by the steps at the top.
     page.click("#r-back")
@@ -340,6 +357,10 @@ def test_save_and_load_results(page, server, tmp_path, monkeypatch):
         page.click("#p-run")
         page.wait_for_selector("#r-body:not([style*='none'])", timeout=600_000)
         page.wait_for_selector("#r-simplex .main-svg")
+        # The saves are in a pop-up behind a button, hidden until it is clicked.
+        assert not page.is_visible("#r-save")
+        page.click("#r-saves-open")
+        page.wait_for_selector("#r-save", state="visible")
         # A name is needed, and a taken name is refused.
         page.click("#r-save")
         page.wait_for_selector("#r-save-status .status.error")
@@ -363,6 +384,8 @@ def test_save_and_load_results(page, server, tmp_path, monkeypatch):
         page.evaluate("sessionStorage.clear()")
         page.goto(server + "/results")
         page.wait_for_selector("text=Nothing has been run yet")
+        page.click("#r-saves-open")
+        page.wait_for_selector("#r-load", state="visible")
         page.click("#r-load")
         page.wait_for_selector("#r-save-status .status.error")                      # nothing chosen
         page.locator("#r-load-choice").click()
@@ -371,6 +394,7 @@ def test_save_and_load_results(page, server, tmp_path, monkeypatch):
         page.wait_for_selector("#r-body:not([style*='none'])", timeout=60_000)
         page.wait_for_selector("#r-simplex .main-svg")
         page.wait_for_selector("#r-hist .main-svg")
+        page.wait_for_selector("#r-saves-modal", state="hidden")                  # a load closes the pop-up
         assert page.locator(".strategy-card .chip").all_inner_texts() == ["S1", "S2"]
         assert "CN:00000-0+" in page.inner_text("#r-norm")
         # Its settings are on the parameters page again.
@@ -379,6 +403,8 @@ def test_save_and_load_results(page, server, tmp_path, monkeypatch):
                                "document.querySelector('#p-barcode').value === 'CN:00000-0+ NC:00000000'")
         # Rename it (a name is needed), then delete it.
         page.click("a.step:has-text('Results')")
+        page.click("#r-saves-open")
+        page.wait_for_selector("#r-load-choice", state="visible")
         page.locator("#r-load-choice").click()
         page.get_by_role("option", name=re.compile("^my run")).last.click()
         page.click("#r-rename")
@@ -390,6 +416,7 @@ def test_save_and_load_results(page, server, tmp_path, monkeypatch):
         page.locator("#r-load-choice").click()
         page.get_by_role("option", name=re.compile("^renamed run")).last.click()
         page.once("dialog", lambda dialog: dialog.accept())
+        page.click(".modal-panel h3")                          # close the list if it is still open
         page.click("#r-delete")
         page.wait_for_function("document.querySelector('#r-save-status').innerText.includes('Deleted')")
         assert not (tmp_path / "renamed_run.sqlite").exists()

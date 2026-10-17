@@ -32,9 +32,18 @@ h3 { font-size: 15px; margin: 0 0 12px; }
         margin-bottom: 16px; min-width: 0; }
 .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
 .two-col.tight { gap: 24px; }
-.results-top { display: grid; grid-template-columns: minmax(0, 3fr) minmax(0, 2fr); gap: 16px; }
-@media (max-width: 900px) { .two-col, .results-top { grid-template-columns: 1fr; } }
-@media (min-width: 1600px) { .page.wide .results-top { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); } }
+
+@media (max-width: 900px) { .two-col { grid-template-columns: 1fr; } }
+.three-col { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+@media (max-width: 1100px) { .three-col { grid-template-columns: 1fr; } }
+.collapsible { margin-bottom: 16px; }
+.collapsible > summary { cursor: pointer; font-weight: 600; font-size: 15px; margin-bottom: 10px; }
+.modal { position: fixed; inset: 0; z-index: 100; display: flex; align-items: flex-start; justify-content: center; }
+.modal-backdrop { position: absolute; inset: 0; background: rgba(20, 30, 50, 0.4); }
+.modal-panel { position: relative; margin-top: 8vh; width: min(820px, 92vw); max-height: 84vh; overflow: auto;
+               background: var(--card); border-radius: 10px; padding: 8px 8px 0; box-shadow: 0 12px 40px rgba(0, 0, 0, 0.3); }
+.modal-panel .card { border: none; margin-bottom: 8px; }
+.modal-close { position: absolute; top: 6px; right: 12px; font-size: 22px; line-height: 1; z-index: 1; }
 
 .field { display: flex; flex-direction: column; gap: 4px; margin-bottom: 10px; min-width: 90px; }
 .field.inline { flex-direction: row; align-items: center; gap: 8px; }
@@ -101,9 +110,7 @@ table.summary { width: 100%; }
 .checks label { margin-right: 14px; font-weight: normal; }
 .checks input { margin-right: 4px; }
 
-.strategy-strip { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-top: 8px; }
-@media (max-width: 900px) { .strategy-strip { grid-template-columns: 1fr; } }
-@media (min-width: 1600px) { .strategy-strip { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+.strategy-strip { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; margin-top: 8px; }
 .strategy-card { border: 1px solid var(--line); border-left-width: 4px; border-radius: 8px; padding: 10px 12px; min-width: 0; }
 .strategy-head { display: flex; align-items: center; gap: 8px; margin-bottom: 2px; flex-wrap: wrap; }
 .chip { color: white; font-weight: 600; font-size: 12px; border-radius: 10px; padding: 1px 8px; }
