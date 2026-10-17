@@ -2,7 +2,6 @@
 
 import numpy as np
 import plotly.graph_objects as go
-from plotly.subplots import make_subplots
 
 COLORS = ["#3B6FB6", "#D9822B", "#3A9D5D"]
 MARGINAL = "#333333"
@@ -343,45 +342,38 @@ def _triangle_figure(names, labels, grid, velocities, converged, rest_points, tr
 
 def _line_figure(names, labels, grid, velocities, converged, rest_points, trajectory, current, hover,
                  click_resolution):
-    """Two strategies: x = share of the second strategy; top panel d rho_2/dt, bottom panel arrows on the line."""
-    fig = make_subplots(rows=2, cols=1, shared_xaxes=True, row_heights=[0.6, 0.4], vertical_spacing=0.05)
+    """Two strategies: the simplex is a line, x = share of the second strategy, with arrows and rest points on it."""
+    fig = go.Figure()
     x = grid[:, 1]
     v = velocities[:, 1]
-    order = np.argsort(x)
-    fig.add_trace(go.Scatter(x=x[order], y=v[order], mode="lines+markers", line=dict(color="#555", width=1.5),
-                             marker=dict(size=5, color=np.where(converged[order], "#555", "#BBB")),
-                             hovertext=np.array(hover, dtype=object)[order], hoverinfo="text",
-                             customdata=grid[order].tolist(), showlegend=False, name="velocity"), row=1, col=1)
-    fig.add_hline(y=0, line=dict(color="#999", width=1), row=1, col=1)
     # Clickable layer along the line.
     fine = np.linspace(0, 1, click_resolution + 1)
     fig.add_trace(go.Scatter(x=fine, y=np.zeros_like(fine), mode="markers", marker=dict(size=14, opacity=0),
                              hoverinfo="none", customdata=np.column_stack([1 - fine, fine]).tolist(), showlegend=False,
-                             name="click"), row=2, col=1)
+                             name="click"))
     fig.add_trace(go.Scatter(x=[0, 1], y=[0, 0], mode="lines", line=dict(color="black", width=1.5),
-                             hoverinfo="skip", showlegend=False), row=2, col=1)
+                             hoverinfo="skip", showlegend=False))
     magnitude = np.abs(v)
     vmax = magnitude.max() if magnitude.size else 0
     spacing = 1 / max(1, len(grid) - 1)
     scale = 0.8 * spacing / vmax if vmax > 0 else 0
     for t in _arrow_traces(x, np.zeros_like(x), v * scale, np.zeros_like(x), magnitude, vmax, converged, hover, grid):
-        fig.add_trace(t, row=2, col=1)
+        fig.add_trace(t)
     if trajectory is not None and len(trajectory):
         fig.add_trace(go.Scatter(x=[trajectory[0, 1]], y=[0], mode="markers", name="start",
-                                 marker=dict(symbol="square", size=9, color="#C0392B"), hoverinfo="skip"), row=2, col=1)
+                                 marker=dict(symbol="square", size=9, color="#C0392B"), hoverinfo="skip"))
     for t in _rest_trace(rest_points, lambda r: (np.asarray(r)[:, 1], np.zeros(len(r))), labels):
-        fig.add_trace(t, row=2, col=1)
+        fig.add_trace(t)
     cx = [current[1]] if current is not None else [None]
     fig.add_trace(go.Scatter(x=cx, y=[0] if current is not None else [None], mode="markers", name="selected",
-                             marker=dict(symbol="x", size=12, color="#C0392B"), hoverinfo="skip"), row=2, col=1)
-    fig.update_yaxes(title_text=f"d(share of {labels[1]})/dt", row=1, col=1, zeroline=False)
-    fig.update_yaxes(visible=False, range=[-1, 1], row=2, col=1)
-    fig.update_xaxes(range=[-0.05, 1.05], row=2, col=1,
+                             marker=dict(symbol="x", size=12, color="#C0392B"), hoverinfo="skip"))
+    fig.update_yaxes(visible=False, range=[-1, 1])
+    fig.update_xaxes(range=[-0.05, 1.05],
                      title_text=f"share of {labels[1]}   ({labels[0]}: {names[0]},  {labels[1]}: {names[1]})",
                      tickvals=[0, 0.25, 0.5, 0.75, 1],
                      ticktext=[f"all {labels[0]}", "0.25", "0.5", "0.75", f"all {labels[1]}"])
-    return _layout(fig, height=480, hovermode="closest", clickmode="event",
-                   legend=dict(orientation="h", y=-0.25, x=0.5, xanchor="center"))
+    return _layout(fig, height=300, hovermode="closest", clickmode="event",
+                   legend=dict(orientation="h", y=-0.45, x=0.5, xanchor="center"))
 
 
 # ---------------------------------------------------------------- scores and matrices
