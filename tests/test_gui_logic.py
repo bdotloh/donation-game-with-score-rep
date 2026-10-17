@@ -405,3 +405,21 @@ def test_the_download_has_a_trajectory_only_after_an_evolution():
     assert "trajectory.csv" not in names and "selected_point.json" in names and "vector_field.csv" in names
     run.evolve(np.array([0.4, 0.3, 0.3]), 2, 1.0)
     assert "trajectory.csv" in zipfile.ZipFile(io.BytesIO(results_zip(run, {"kind": "frame", "frame": 0}))).namelist()
+
+
+@pytest.mark.parametrize("cfg", [
+    spec.preset_strategy("AllD-Disc"),
+    {"type": "phi", "name": "p", "P": None, "tau": None, "phi": 1.5},
+    {"type": "ternary", "name": "t", "P": [[0, 0, 0], [0, 1, 0.5], [0, 1, 1]], "tau": 2, "phi": None},
+])
+def test_strategy_heatmap(cfg):
+    strategy = spec.build_strategy(cfg)
+    fig = figures.strategy_heatmap(strategy, 6)
+    heat = fig.data[0]
+    top = max(6, strategy.partition.tau + 3) if strategy.partition.n_classes == 3 else 6
+    np.testing.assert_allclose(heat.z, figures.help_surface_values(strategy, top))      # rows donor, columns receiver
+    assert (heat.zmin, heat.zmax) == (0, 1) and heat.colorscale is not None             # the same scale for every strategy
+    assert list(heat.x) == list(heat.y) == list(range(top + 1))
+    assert len(fig.layout.annotations) == (top + 1) ** 2                                # the values are written in
+    big = figures.strategy_heatmap(strategy, 40, height=440)
+    assert len(big.layout.annotations) == 0 and big.layout.height == 440                # too many cells to label
