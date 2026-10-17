@@ -17,7 +17,8 @@ def small_run(n=3):
         strategies.append({"type": "phi", "name": "phi", "P": None, "tau": None, "phi": 1.0})
     experiment, error = experiment_from_inputs(
         strategies, [{"score": 0, "mass": 0.5}, {"score": 1, "mass": 0.5}], "binary", None,
-        list("00000-0+"), list("00000000"), "0.1", "0.4", "0.6", "0.5", "2", "1", "60", "1e-5", "3")
+        list("00000-0+"), list("00000000"), "0.1", "0.4", "0.6", "0.5", "2", "1",
+        {"max_iter": "60", "tol": "1e-5", "resolution": "3", "full_steps": True})
     assert error == ""
     run = Run(experiment)
     run.compute()

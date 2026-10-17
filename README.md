@@ -112,27 +112,28 @@ python -m gui            # then open http://127.0.0.1:8050
    2 or 3. They are labelled S1, S2, S3 in that order.
 2. **Parameters**: the initial score distribution, scoring norm (binary or ternary, one
    dropdown per case, a preset, or paste a barcode), noise ε, ε↑, ε↓ (ε↑ + ε↓ = 1),
-   the probability q of being able to help, benefit and cost. Under Advanced: the number of score
-   iterations, the arrow grid, and whether every score chain runs for all its
-   iterations. Defaults: ε = 0.1, ε↑ = ε↓ = 0.5, 2000 score iterations, all of
-   them run. With ε↑ = ε↓ many populations have no stable score distribution, so
-   values are those after the 2000 iterations. Settings can be saved and loaded
-   as JSON.
-3. **Results**: the score update norm comes first, as its barcode with how to read it and tables of the
-   score changes; then a card shows the strategies as S1, S2, S3 in the colours of the plots, with their
-   decision tables (p(help) for each class of receiver and donor; φ-Disc by donor score) and, if ticked,
-   their p(help) surfaces. Then the simplex (a line for 2 strategies, a triangle for 3) with a
-   dense grid of arrows coloured and sized by speed, flow lines through the whole
-   simplex and rest points (black stable, white unstable, gray saddle). Where only some points' score chains
-   converged, the others' arrows are lighter; a note says when none did. Nothing is selected at first: click
-   the simplex or type shares and press Show to see the score distributions there (overlaid, one per
-   strategy, plus the population; the x and y ranges can be typed), the payoff matrix and the helping rates;
-   strategies with share 0 are left out of these. **Evolve from point** then evolves the replicator
-   dynamics from the selected point (the step size and number of steps are under Advanced next to the
-   button, defaults 1 and 100): the trajectory is drawn on the simplex from the start point, and Play steps
-   through it. A new evolution replaces the last one. Figures download as PNG or SVG from each plot's
-   toolbar; "Download data" gives the last evolution (if any), the vector field, rest points and
-   selected point as CSV/JSON.
+   the probability q of being able to help, benefit and cost. The solver settings are not on the page:
+   2000 score iterations, all of them run, tolerance 1e-6 and an arrow grid of 20 points per side (a
+   settings file keeps its own). Defaults: ε = 0.1, ε↑ = ε↓ = 0.5. With ε↑ = ε↓ many populations have no
+   stable score distribution, so values are those after the 2000 iterations. Settings can be saved and
+   loaded as JSON.
+3. **Results**, in three rows. Row 1 (it can be folded away): the strategies as S1, S2, S3 in the colours of
+   the plots, with their decision tables (p(help) for each class of receiver and donor; φ-Disc by donor
+   score) and, if ticked, their p(help) heat maps, beside the score update norm as its barcode and tables
+   of the score changes. Row 2: the simplex (a line for 2 strategies, a triangle for 3, with the norm's
+   barcode in its top left corner) with a dense grid of arrows coloured and sized by speed, flow lines
+   through the whole simplex and rest points (black stable, white unstable, gray saddle); and beside it
+   the score distributions (overlaid, one per strategy, plus the population; the x and y ranges can be
+   typed). Where only some points' score chains converged, the others' arrows are lighter; a note says
+   when none did. Row 3: the payoff matrix, the helping rates and the "At the selected point" box.
+   Nothing is selected at first: click the simplex, or type shares in the box and press Show, to see the
+   score distributions, payoff matrix and helping rates there (strategies with share 0 are left out).
+   **Evolve from point** then evolves the replicator dynamics from the selected point (the step size and
+   number of steps are under Advanced next to the button, defaults 1 and 100): the trajectory is drawn on
+   the simplex from the start point, and Play steps through it. A new evolution replaces the last one.
+   Figures download as PNG or SVG from each plot's toolbar; "Download data" gives the last evolution (if
+   any), the vector field, rest points and selected point as CSV/JSON. "Save / load results" in the toolbar
+   opens a pop-up for saved results (see below).
 
 The steps at the top are links, so you can move between the pages freely. From Parameters,
 "Current results →" goes back to the results of the last run without running it again (a

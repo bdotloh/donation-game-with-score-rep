@@ -33,16 +33,21 @@ def server():
 
     import logging
 
+    from gui import spec
     from gui.app import create_app
 
     logging.getLogger("werkzeug").setLevel(logging.ERROR)
 
+    # The solver settings are not on the page, so a run takes the defaults; use small ones to keep the test short.
+    saved = dict(spec.DEFAULT_ADVANCED)
+    spec.DEFAULT_ADVANCED.update(max_iter=300, resolution=4, tol=1e-5)
     app = create_app()
     srv = make_server("127.0.0.1", PORT, app.server, threaded=True)
     thread = threading.Thread(target=srv.serve_forever, daemon=True)
     thread.start()
     yield f"http://127.0.0.1:{PORT}"
     srv.shutdown()
+    spec.DEFAULT_ADVANCED.update(saved)
 
 
 @pytest.fixture(scope="module")
@@ -179,10 +184,7 @@ def _full_flow(page):
     page.wait_for_selector("#p-noise-status .status.error")
     set_text(page, "#p-eps-down", "0.6")
     page.wait_for_function("document.querySelector('#p-noise-status').innerText === ''")
-    page.click(".advanced summary")
-    set_text(page, "#p-maxiter", "300")
-    set_text(page, "#p-resolution", "4")
-    set_text(page, "#p-tol", "1e-5")
+    assert page.locator(".advanced").count() == 0 and page.locator("#p-maxiter").count() == 0   # no Advanced section
     shot(page, "2_parameters")
     page.click("#p-run")
 

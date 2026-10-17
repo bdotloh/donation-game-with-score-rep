@@ -24,10 +24,7 @@ FORM = [
     ("p-q", "value"),
     ("p-benefit", "value"),
     ("p-cost", "value"),
-    ("p-maxiter", "value"),
-    ("p-tol", "value"),
-    ("p-resolution", "value"),
-    ("p-full", "value"),
+    ("p-advanced", "data"),
 ]
 
 
@@ -52,6 +49,12 @@ def actions(has_run=False):
     )
 
 
+def advanced_defaults():
+    """The solver settings that are not on the page, as the stored inputs."""
+    return {**{k: f"{spec.DEFAULT_ADVANCED[k]:g}" for k in ("max_iter", "tol", "resolution")},
+            "full_steps": spec.DEFAULT_ADVANCED["full_steps"]}
+
+
 def defaults(n=None):
     return {
         "scores": [{"score": 0, "mass": 0.5}, {"score": 1, "mass": 0.5}],
@@ -59,8 +62,7 @@ def defaults(n=None):
         "noise": {"eps": "0.1", "eps_up": "0.5", "eps_down": "0.5"},
         "interactions": {"p_can": "0.5", "benefit": f"{spec.DEFAULT_ADVANCED['benefit']:g}",
                          "cost": f"{spec.DEFAULT_ADVANCED['cost']:g}"},
-        "advanced": {**{k: f"{spec.DEFAULT_ADVANCED[k]:g}" for k in ("max_iter", "tol", "resolution")},
-                     "full_steps": spec.DEFAULT_ADVANCED["full_steps"]},
+        "advanced": advanced_defaults(),
     }
 
 
@@ -105,19 +107,9 @@ def form(strategies, params):
                             field("Cost c", text_input("p-cost", inter["cost"])),
                         ], className="row"),
                         html.Div(id="p-inter-status"),
-                        html.Details([
-                            html.Summary("Advanced"),
-                            html.Div([
-                                field("Max score iterations", text_input("p-maxiter", adv["max_iter"], mode="numeric")),
-                                field("Score tolerance", text_input("p-tol", adv["tol"])),
-                                field("Arrow grid", text_input("p-resolution", adv["resolution"], mode="numeric"),
-                                      hint="Points per side of the simplex."),
-                            ], className="row wrap"),
-                            dcc.Checklist(id="p-full", className="checks",
-                                          options=[{"label": "Run every score chain for all the iterations",
-                                                    "value": "full"}],
-                                          value=["full"] if adv.get("full_steps", True) else []),
-                        ], className="advanced"),
+                        # The solver settings (score iterations, tolerance, arrow grid, whether every chain runs
+                        # all its iterations) are not on the page; they are the defaults, or those of a loaded file.
+                        dcc.Store(id="p-advanced", data=adv),
                     ]),
                 ]),
             ],
@@ -202,7 +194,7 @@ def register(app):
         *[Input(i, p) for i, p in FORM],
         prevent_initial_call=True,
     )
-    def remember(scores, norm_type, tau, cn, nc, eps, eps_up, eps_down, q, b, c, maxiter, tol, res, full):
+    def remember(scores, norm_type, tau, cn, nc, eps, eps_up, eps_down, q, b, c, advanced):
         if not cn:
             return no_update
         bits = "".join(cn or [])
@@ -212,7 +204,7 @@ def register(app):
                      "CN": bits, "NC": "".join(nc or [])},
             "noise": {"eps": eps, "eps_up": eps_up, "eps_down": eps_down},
             "interactions": {"p_can": q, "benefit": b, "cost": c},
-            "advanced": {"max_iter": maxiter, "tol": tol, "resolution": res, "full_steps": bool(full)},
+            "advanced": advanced,
         }
 
     @app.callback(Output("p-noise-status", "children"),
@@ -411,7 +403,7 @@ def interactions(q, b, c):
 
 
 def experiment_from_inputs(strategies, scores, norm_type, tau, cn, nc, eps, eps_up, eps_down, q, b, c,
-                           maxiter, tol, resolution, full=("full",)):
+                           advanced=None):
     """A validated experiment dict, or the first error message."""
     if not strategies or not 2 <= len(strategies) <= spec.MAX_STRATEGIES:
         return None, "Choose 2 or 3 strategies first."
@@ -435,12 +427,13 @@ def experiment_from_inputs(strategies, scores, norm_type, tau, cn, nc, eps, eps_
         spec.build_norm(norm)
     except ValueError as error:
         return None, f"Norm: {error}"
-    tol_value, error = validation.non_negative(tol, "The tolerance")
+    advanced = {**advanced_defaults(), **(advanced or {})}
+    tol_value, error = validation.non_negative(advanced["tol"], "The tolerance")
     if error:
         return None, error
     numbers = {}
-    for key, value, what in (("max_iter", maxiter, "Max score iterations"), ("resolution", resolution, "The arrow grid")):
-        numbers[key], error = validation.positive_int(value, what)
+    for key, what in (("max_iter", "Max score iterations"), ("resolution", "The arrow grid")):
+        numbers[key], error = validation.positive_int(advanced[key], what)
         if error:
             return None, error
     total = sum(float(e["mass"]) for e in scores)
@@ -453,6 +446,6 @@ def experiment_from_inputs(strategies, scores, norm_type, tau, cn, nc, eps, eps_
         **inter,
         "tol": tol_value,
         **numbers,
-        "full_steps": bool(full),
+        "full_steps": bool(advanced["full_steps"]),
     }
     return experiment, ""

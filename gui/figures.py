@@ -84,27 +84,27 @@ def strategy_surface(strategy, max_score=10, title=None):
 
 
 def strategy_heatmap(strategy, max_score=6, height=230, font_size=10, annotate_up_to=9):
-    """p(help) over (receiver score, donor score) as a heat map for a strategy card. Viridis from 0 (dark purple)
+    """p(help) over (donor score across, receiver score up) as a heat map for a strategy card. Viridis from 0 (dark purple)
     to 1 (yellow) is perceptually even and readable in grey and with colour-vision deficiency; the scale is fixed
     to 0..1 so strategies can be compared. Each cell shows its value when there are few. A ternary strategy is
     always shown past its cut-off tau, so the top class is visible too. height and font_size size the figure
     (a card or the large preview); the values are written in the cells up to annotate_up_to scores."""
     if strategy.partition.n_classes == 3:
         max_score = max(max_score, strategy.partition.tau + 3)
-    values = help_surface_values(strategy, max_score)          # rows: donor score, columns: receiver score
+    values = help_surface_values(strategy, max_score).T        # rows: receiver score, columns: donor score
     scores = list(range(max_score + 1))
     fig = go.Figure(go.Heatmap(
         z=values, x=scores, y=scores, zmin=0, zmax=1, colorscale="Viridis", xgap=1, ygap=1,
         colorbar=dict(title=dict(text="p(help)", side="right"), thickness=10, len=0.9, tickvals=[0, 0.5, 1]),
-        hovertemplate="receiver score %{x}<br>donor score %{y}<br>p(help) %{z:.3g}<extra></extra>"))
+        hovertemplate="donor score %{x}<br>receiver score %{y}<br>p(help) %{z:.3g}<extra></extra>"))
     if max_score <= annotate_up_to:
-        for d, row in enumerate(values):
-            for r, p in enumerate(row):
-                fig.add_annotation(x=r, y=d, text=f"{p:.2g}", showarrow=False,
+        for r, row in enumerate(values):
+            for d, p in enumerate(row):
+                fig.add_annotation(x=d, y=r, text=f"{p:.2g}", showarrow=False,
                                    font=dict(size=font_size, color="white" if p < 0.6 else "black"))
     dtick = 1 if max_score <= 12 else 5 if max_score <= 30 else 10
-    fig.update_xaxes(title="receiver score", tickmode="linear", dtick=dtick, constrain="domain")
-    fig.update_yaxes(title="donor score", tickmode="linear", dtick=dtick, scaleanchor="x", scaleratio=1,
+    fig.update_xaxes(title="donor score", tickmode="linear", dtick=dtick, constrain="domain")
+    fig.update_yaxes(title="receiver score", tickmode="linear", dtick=dtick, scaleanchor="x", scaleratio=1,
                      constrain="domain")
     return _layout(fig, height=height, margin=dict(l=50, r=10, t=10, b=45))
 
