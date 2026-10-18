@@ -191,17 +191,10 @@ the rates too.
 
 ```
 pip install -r requirements.txt
-python scripts/ess_sweep.py run --norms binary-cn --eps 0.01 --maxn 500 --final-maxn 500 --fitness-threshold 0.01 --tie-tol 1e-12 --out out/binary-cn
+python scripts/ess_sweep.py run --norms binary-cn --eps 0.01 --maxn 500 --final-maxn 500 --out out/binary-cn
 python scripts/ess_sweep.py merge out/binary-cn
 python scripts/plot_ess.py out/binary-cn --show-cons          # writes out/binary-cn/ess_figure.png and .pdf
-python docs/verification/compare_published.py out/binary-cn path/to/tokens_CmeetsN_Noise0.01_B2   # against the paper's table
 ```
-
-`--tie-tol 1e-12` treats payoffs that differ by less than that as equal. In norms where everyone ends up helping,
-strategies that differ only where it never matters earn the same payoff up to rounding (about 1e-16); compared
-exactly, rounding decides which of them "invades" the other. With the tolerance, and the paper's settings (500 steps,
-fitness threshold 0.01), the engine finds all 403 ESS of the paper's table for this norm set and no others
-(Check 22 of the verification report).
 
 One row for every ESS found, sorted by cooperation level (fitness / (benefit - cost)),
 lowest at the top. On the left the scoring norm: one cell for each (recipient's class,

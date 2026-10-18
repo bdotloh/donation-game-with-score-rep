@@ -161,9 +161,9 @@ $\rho$ (default $0.99$) against an invader $B$ at $1-\rho$, using the payoffs of
 \item Skip a candidate that earns almost nothing alone ($4\pi<$ \code{fitness\_threshold}): never-helping populations
 are not interesting ESS.
 \item For every invader $B$ of another name: if $A$'s payoff is higher, go on; if lower, $A$ is not an ESS; if equal,
-swap the frequencies and require that $A$ does not do worse than $B$. ``Equal'' means within \code{tie\_tol}: with the
-default $0$ payoffs are compared exactly, so strategies that earn the same payoff up to rounding ($\sim10^{-16}$,
-e.g.\ they differ only where it never matters) are told apart by the rounding; $10^{-12}$ treats them as ties.
+swap the frequencies and require that $A$ does not do worse than $B$. Payoffs are compared exactly, so
+strategies that earn the same payoff up to rounding ($\sim10^{-16}$, e.g.\ they differ only where it never matters) are
+told apart by the rounding.
 \item Finally require $\pi_A\ge10^{-5}$ for the candidate alone with the solver restricted to \code{final\_max\_iter} steps.
 \end{enumerate}
 
@@ -174,7 +174,6 @@ payoffs & \code{Payoffs} & benefit, cost, role factor.\\
 rho & float, \code{0.99} & frequency of the resident when tested against an invader.\\
 fitness\_threshold & float, \code{1e-5} & candidates whose $4\times$ payoff alone is below this are skipped.\\
 final\_max\_iter & int, \code{100} & \code{max\_iter} of the last check.\\
-tie\_tol & float, \code{0.0} & payoffs closer than this count as equal.\\
 candidates, invaders, w\_init & & \code{finder(candidates, invaders, w\_init)} returns the candidates that are ESS against every invader; \code{is\_ess(A, invaders, w\_init)} tests one.\\
 \end{params}
 Also \code{payoff\_alone(strategy, w\_init)} and \code{payoffs\_against(A, B, rho\_A, w\_init)}.

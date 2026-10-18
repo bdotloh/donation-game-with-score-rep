@@ -32,7 +32,7 @@ This report lists the checks made on the engine in \texttt{engine/}, the replica
 \textbf{Two things to know.}
 \begin{itemize}
 \item The notes contain no ternary section, so the ternary results have no printed numbers to be compared with. Checks 10 to 19 check them against independent models, a simulation, closed forms and hand arithmetic instead.
-\item Check~22 is the paper's published ESS table. The engine finds all 403 ESS in it, with no extras, once payoffs that differ by less than $10^{-12}$ count as equal. Compared exactly, 44 are missed: strategies that earn the same payoff up to rounding ($\sim10^{-16}$) are told apart by the rounding. The option is \texttt{tie\_tol} (default 0); the published run used 500 steps, and 200 steps does not come closer.
+\item Check~22 is the paper's published ESS table. The engine finds 359 of its 403 ESS and no others. The 44 it does not find are payoff ties (the invader's payoff is larger by at most $3.3\times10^{-16}$, so rounding decides). Running 200 steps does not come closer; the published file's header says 500 steps.
 \end{itemize}
 
 \input{summary.tex}

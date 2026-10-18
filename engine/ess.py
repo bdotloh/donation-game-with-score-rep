@@ -11,7 +11,7 @@ from .population import Population
 
 
 class ESSFinder:
-    def __init__(self, solver, payoffs, rho=0.99, fitness_threshold=1e-5, final_max_iter=100, tie_tol=0.0):
+    def __init__(self, solver, payoffs, rho=0.99, fitness_threshold=1e-5, final_max_iter=100):
         """
         solver            StableScoreSolver used for every population.
         payoffs           Payoffs.
@@ -19,17 +19,12 @@ class ESSFinder:
         fitness_threshold candidates whose 4 * payoff on their own is below this are skipped.
         final_max_iter    max_iter of the last check that an ESS is not a "boring" one
                           (default 100).
-        tie_tol           two payoffs closer than this count as equal. 0 (the default) compares them exactly, so
-                          when strategies that differ only in what they do in situations that never come up earn the
-                          same payoff up to rounding (about 1e-16), rounding decides whether one invades the other;
-                          a tolerance such as 1e-12 treats those as the ties they are.
         """
         self.solver = solver
         self.final_solver = solver.with_options(max_iter=final_max_iter)
         self.payoffs = payoffs
         self.rho = rho
         self.fitness_threshold = fitness_threshold
-        self.tie_tol = tie_tol
 
     def payoff_alone(self, strategy, w_init, solver=None):
         population = Population([strategy])
@@ -48,13 +43,13 @@ class ESSFinder:
             if B.name == A.name:
                 continue
             fit_A, fit_B = self.payoffs_against(A, B, self.rho, w_init)
-            if fit_A > fit_B + self.tie_tol:
+            if fit_A > fit_B:
                 continue
-            if fit_A < fit_B - self.tie_tol:
+            if fit_A < fit_B:
                 return False
             # Equal when A is common: A must not lose when B is common.
             fit_A, fit_B = self.payoffs_against(A, B, 1 - self.rho, w_init)
-            if fit_A < fit_B - self.tie_tol:
+            if fit_A < fit_B:
                 return False
         return self.payoff_alone(A, w_init, self.final_solver) >= 1e-5
 

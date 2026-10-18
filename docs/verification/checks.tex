@@ -375,11 +375,11 @@
 
 \item[Checked against] The paper's file \texttt{tokens\_CmeetsN\_Noise0.01\_B2} (its header says 500 steps).
 
-\item[How many] 403 published ESS rows (302 norms), and the same sweep with 200 and 100 steps.
+\item[How many] 403 published ESS rows (302 norms); the same sweep with 200 and 100 steps.
 
 \item[Result] \textbf{Agree} (with the exception below)
 
-\item[Note] The engine finds all 403, and no ESS that the file lacks, when payoffs closer than $10^{-12}$ count as equal (\texttt{tie\_tol}); the cooperation levels of the rows differ by at most $8\times10^{-4}$. With payoffs compared exactly (\texttt{tie\_tol} 0) it finds 359 and misses 44 in 25 norms: in each of those the invader's payoff is larger than the resident's by at most $3.3\times10^{-16}$, i.e.\ strategies that differ only in what they do where it never matters earn the same payoff and rounding decides. Running 200 steps does not come closer: it finds 362 but adds 33 ESS that the file lacks and the cooperation levels differ by up to 0.27 (100 steps: 346 found, 29 extra, up to 0.45). The published run therefore used the 500 steps of its header.
+\item[Note] The engine finds 359 of the 403 and no ESS that the file lacks; the cooperation levels of the 359 differ by at most $8\times10^{-4}$. The other 44 (in 25 norms) are payoff ties: the invader's payoff is larger than the resident's by at most $3.3\times10^{-16}$, because strategies that differ only where it never matters earn the same payoff and rounding decides. Running 200 steps does not come closer: it finds 362 but adds 33 ESS that the file lacks and the cooperation levels differ by up to 0.27 (100 steps: 346 found, 29 extra, up to 0.45). The file's header says 500 steps.
 
 \end{description}
 

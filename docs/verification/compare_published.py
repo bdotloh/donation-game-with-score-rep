@@ -1,7 +1,10 @@
 """Compare an ess_sweep.py run with a data file of the paper's Julia code (Check 22).
 
+    python scripts/ess_sweep.py run --norms binary-cn --eps 0.01 --maxn 500 --final-maxn 500 \\
+        --fitness-threshold 0.01 --out out/binary-cn      # the paper's settings
+    python scripts/ess_sweep.py merge out/binary-cn
     python docs/verification/compare_published.py out/binary-cn \\
-        ~/bdotloh/origin_money/indirect_reciprocity/data-default/tokens_CmeetsN_Noise0.01_B2 [--threshold 0.01]
+        ~/bdotloh/origin_money/indirect_reciprocity/data-default/tokens_CmeetsN_Noise0.01_B2
 
 An ESS is identified by its norm and its strategy. Prints how many published ESS the engine finds, which it
 misses, which it finds that the file does not have (with the file's own fitness threshold, 0.01, those with a
