@@ -1,0 +1,223 @@
+\section{Elements: classes, strategies, update rules}\label{ch:elements}
+
+These pieces do not depend on each other except that strategies and norms are both written in terms of score classes.
+
+%--------------------------------------------------------------------------
+\subsection{Score partitions}\label{sec:partitions}\emph{module} \code{engine/partitions.py}
+
+\subsubsection{\texttt{ScorePartition}, \texttt{PossessionPartition}, \texttt{TernaryPartition}}
+
+\whatit
+Splits the scores $\{0,1,2,\dots\}$ into classes. Strategies and norms react to a score only through its class.
+
+\howit
+A partition is given by increasing positive \emph{cutoffs} $x_1<x_2<\dots$. Class $c$ holds the scores $j$ with
+$x_c\le j<x_{c+1}$, taking $x_0=0$ and $x_{\text{last}+1}=\infty$; so $m$ cutoffs give $m+1$ classes.
+\code{classify} is a binary search (\code{numpy.searchsorted}) of the score among the cutoffs. Two partitions are equal
+when their cutoffs are. \code{PossessionPartition} is the cutoff list $(1)$: class $0$ is $s=0$, class $1$ is $s\ge1$.
+\code{TernaryPartition(tau)} is $(1,\tau+1)$: $s=0$, $1\le s\le\tau$, $s>\tau$.
+
+\paramsh
+\begin{params}
+cutoffs & increasing positive ints & \code{ScorePartition}: the first score of every class except class 0. Raises \code{ValueError} if not strictly increasing and positive.\\
+tau & int $\ge1$ & \code{TernaryPartition}: the last score of the middle class.\\
+\end{params}
+Attributes and methods: \code{cutoffs}, \code{n\_classes}, \code{classify(j)} (class index of one score or an array of scores), \code{class\_masses(w)} (probability mass of a score distribution in each class).
+
+\exh
+\ex{partition}
+
+%--------------------------------------------------------------------------
+\subsection{Strategies}\label{sec:strategies}\emph{module} \code{engine/strategies.py}
+
+A strategy answers one question: \emph{with which probability does a donor help?}
+It may depend on the receiver, only through the receiver's class, and on the donor's own exact score $d$:
+\[
+ h(c,d)=\Pr(\text{donor with score } d \text{ helps}\mid \text{receiver in class } c).
+\]
+Every strategy supplies this table through \code{donor\_help(n\_scores)}, an array of shape
+(\code{n\_classes}, \code{n\_scores}) with entry $[c,d]$, and the partition that defines its classes.
+
+\subsubsection{\texttt{Strategy} (the base class)}
+
+\whatit
+Fixes what the rest of the engine can rely on: a \code{partition}, a \code{donor\_help(n\_scores)} table and a \code{name}.
+
+\howit
+Subclasses implement \code{\_compute\_donor\_help} and \code{name}. \code{donor\_help} caches the table and, when more
+scores are asked for than have been computed, recomputes it for at least twice as many, so the cost is amortised as the
+score range grows.
+
+\paramsh
+\begin{params}
+partition & \code{ScorePartition} & the classes the strategy distinguishes in the receiver.\\
+\end{params}
+
+\subsubsection{\texttt{ClassStrategy}, \texttt{BinaryStrategy}, \texttt{TernaryStrategy}}
+
+\whatit
+Strategies whose help probability depends only on the classes of the receiver and of the donor: a table
+$P[c_{\text{receiver}},c_{\text{donor}}]$ of probabilities.
+\code{BinaryStrategy} uses the classes $s=0$ / $s\ge1$ (a $2\times2$ table), \code{TernaryStrategy} the classes of
+\code{TernaryPartition(tau)} (a $3\times3$ table).
+
+\howit
+$h(c,d)=P[c,\ \text{class}(d)]$, evaluated for all scores at once by indexing the table with the class of every score.
+The \emph{name} writes the table row by row, rows being the receiver's class and columns the donor's class, with
+\code{0} for 0, \code{g} for 1 (``gives'') and the number otherwise: \code{"0,0|0,g"} helps only when both donor and
+receiver have a score (the Discriminators). A ternary name is followed by \code{(tau=T)}. \code{from\_name} reads such a
+name back.
+
+\paramsh
+\begin{params}
+P & $n\times n$ array, entries in $[0,1]$ & the table; $n=2$ binary, $n=3$ ternary. \code{ValueError} for a wrong shape or an entry outside $[0,1]$.\\
+tau & int $\ge1$ & \code{TernaryStrategy} only: the cutoff between the middle and top classes.\\
+name & str & \code{from\_name(name)} / \code{from\_name(name, tau)}: a table written as above.\\
+strategy & \code{BinaryStrategy} & \code{TernaryStrategy.from\_binary(strategy, tau)}: the ternary strategy that treats both positive classes like $s\ge1$.\\
+\end{params}
+
+\exh
+\ex{binary_strategy}
+\ex{ternary_strategy}
+
+\subsubsection{\texttt{PhiDisc}}
+
+\whatit
+The strategy ``help in proportion to how little you have'': a donor with score $d\ge1$ helps a receiver \emph{with a
+score} with probability $d^{-\varphi}$. A donor with score $0$ helps such a receiver with probability $p_0$
+(by default $0$: it never helps). A receiver with score $0$ is never helped.
+
+\howit
+Two classes ($s=0$, $s\ge1$). In the table $h(c,d)$: row $0$ (receiver without a score) is all zeros; row $1$ is
+$h(1,0)=p_0$ and $h(1,d)=d^{-\varphi}$ for $d\ge1$. With $\varphi=0$ every donor with a score helps (cooperators
+towards receivers with a score); larger $\varphi$ makes richer donors give less. The name is
+\code{phi-Disc(phi=1)}, or \code{phi-Disc(phi=1,p0=0.3)} when $p_0\neq0$.
+
+\paramsh
+\begin{params}
+phi & float $\ge0$ & the exponent $\varphi$. \code{ValueError} if negative.\\
+p0 & float in $[0,1]$, default \code{0.0} & the probability that a donor with score $0$ helps a receiver with a score. \code{ValueError} outside $[0,1]$.\\
+\end{params}
+
+\exh
+\ex{phi_disc}
+
+\subsubsection{Helpers: \texttt{Defectors}, \texttt{Discriminators}, \texttt{all\_binary\_strategies}, \texttt{all\_ternary\_strategies}, \texttt{strategy\_from\_name}}
+
+\whatit
+\code{Defectors()} never helps (\code{"0,0|0,0"}); \code{Discriminators()} helps only when donor and receiver both have a
+score (\code{"0,0|0,g"}). \code{all\_binary\_strategies()} lists the 16 deterministic binary strategies and
+\code{all\_ternary\_strategies(tau)} the 512 deterministic ternary ones (every entry $0$ or $1$), in the order
+$0$ before \code{g}. \code{strategy\_from\_name} builds any strategy from its name.
+
+\howit
+The lists run over every $0/1$ assignment of the table (\code{itertools.product}). \code{strategy\_from\_name} decides by
+the shape of the text: two rows separated by \code{|} is binary, three rows is ternary (it needs \code{tau}, or a trailing
+\code{(tau=T)}), and \code{phi:PHI} or \code{phi:PHI,p0=P} (also \code{phi-Disc(phi=PHI,p0=P)}) is a $\varphi$-Disc.
+
+\paramsh
+\begin{params}
+tau & int & \code{all\_ternary\_strategies(tau)}, and \code{strategy\_from\_name(name, tau)} for a ternary name without \code{(tau=T)}.\\
+name & str & the strategy's name.\\
+\end{params}
+
+\exh
+\ex{strategy_helpers}
+
+%--------------------------------------------------------------------------
+\subsection{Scoring norms (the update rules)}\label{sec:norms}\emph{modules} \code{engine/norms.py}, \code{engine/known\_norms.py}
+
+\subsubsection{\texttt{ScoringNorm}}
+
+\whatit
+The rule that changes scores after a meeting: by $-1$, $0$ or $+1$ for the donor (\code{CN}, ``Can meets Need'') and
+for the receiver (\code{NC}, ``Need meets Can''), depending on the classes of both and on whether help was given.
+
+\howit
+Two arrays indexed \code{[receiver class, act, donor class]} with \code{act}${}=0$ for ``declines'' and $1$ for
+``gives'', each of shape $(m,2,m)$ for $m$ classes. The \emph{barcode} writes each array flattened in that index order
+(the donor's class changes fastest) with \code{-}, \code{0}, \code{+}, so \code{"CN:00000-00 NC:00000000"} (binary, 8
+characters each) reads: only \code{CN[1,0,1]} is nonzero, $-1$: a donor with a score who \emph{declines} a receiver with a
+score loses one. A score of $0$ cannot go down, so the entries with a donor (for \code{CN}) or receiver (for \code{NC})
+in class $0$ may not be \code{-} (\code{ValueError}). Ternary norms have 18 characters each and need $\tau$.
+
+\paramsh
+\begin{params}
+CN, NC & arrays of ints in $\{-1,0,1\}$, shape $(m,2,m)$ & the two rules.\\
+partition & \code{ScorePartition}, default \code{PossessionPartition()} & the classes the rules use.\\
+barcode & str & \code{ScoringNorm.from\_barcode(barcode, tau=None)}: \code{"CN:\dots{} NC:\dots{}"} (the older \code{CmeetsN:}/\code{NmeetsC:} spelling is accepted); 8 characters is binary and takes no \code{tau}, 18 is ternary and needs it.\\
+tau & int & \code{to\_ternary(tau)}: lifts a binary norm, both positive classes acting like $s\ge1$.\\
+\end{params}
+Also: \code{.barcode}, \code{.is\_ternary}, \code{.partition}, equality.
+
+\exh
+\ex{norm}
+
+\subsubsection{\texttt{all\_norms}}
+
+\whatit
+Iterates over every valid norm, e.g. to search for norms with a given ESS.
+
+\howit
+Each entry takes the values $\{0,+\}$ where a score cannot fall and $\{-,0,+\}$ elsewhere; \code{itertools.product} runs
+over all combinations of the two rules, and an unused rule is held at all zeros. A binary rule has $2^4 3^4=1296$ options,
+a ternary rule $2^6 3^{12}=34{,}012{,}224$, so with both rules there are $1296^2$ binary norms: iterate lazily.
+
+\paramsh
+\begin{params}
+tau & int or \code{None} & \code{None}: binary norms; an int: ternary norms with that $\tau$.\\
+use\_CN & bool, \code{True} & vary the donor rule (otherwise all zeros).\\
+use\_NC & bool, \code{True} & vary the receiver rule (otherwise all zeros).\\
+\end{params}
+
+\exh
+\ex{all_norms}
+
+\subsubsection{\texttt{NamedNorm}, \texttt{LEADING\_EIGHT}, \texttt{MONEY}}
+
+\whatit
+Norms from the literature, with the strategy that is evolutionarily stable under each: the Leading Eight (Ohtsuki and
+Iwasa), which only change the donor, and the money norm.
+
+\howit
+\code{NamedNorm} is a small immutable record (\code{label}, \code{name}, \code{CN}, \code{NC}, \code{strategy}) with the
+properties \code{barcode}, \code{title} and the method \code{norm(tau=None)} that builds the \code{ScoringNorm} (lifted to ternary
+classes when \code{tau} is given). \code{LEADING\_EIGHT} holds L1--L8 (the strategy is \code{"g,0|g,g"} for L1 and L2 and
+\code{"0,0|g,g"} for the others); \code{MONEY} is \code{CN:000000++ NC:000000--}: a donor who gives to a receiver with a
+score gains one and the receiver loses one.
+
+\paramsh
+\begin{params}
+tau & int or \code{None} & \code{NamedNorm.norm(tau)}: lift the binary norm to a ternary one.\\
+\end{params}
+
+\exh
+\ex{named_norms}
+
+%--------------------------------------------------------------------------
+\subsection{Noise}\label{sec:noise}\emph{module} \code{engine/noise.py}
+
+\subsubsection{\texttt{Noise}}
+
+\whatit
+Random score changes on top of the norm: with probability $\varepsilon$ an update is replaced by a random one, upwards
+with probability $\varepsilon_\uparrow$ and downwards with $\varepsilon_\downarrow$.
+
+\howit
+An immutable record that checks its values. The transition rates $G,F$ from interactions alone become
+\[
+ g=(1-\varepsilon)\,G+\varepsilon\,\varepsilon_\uparrow,\qquad f=(1-\varepsilon)\,F+\varepsilon\,\varepsilon_\downarrow
+\]
+(applied in \code{TransitionRates}, section~\ref{sec:rates}; a score of $0$ never goes down). \code{ValueError} if a value is
+outside $[0,1]$ or $\varepsilon_\uparrow+\varepsilon_\downarrow>1$ (the notes take the sum to be 1; a sum below 1 just
+leaves some noise doing nothing). \code{Noise.from\_noise\_val(v)} is $\varepsilon=v$, $\varepsilon_\uparrow=\varepsilon_\downarrow=\tfrac12$.
+
+\paramsh
+\begin{params}
+eps & float in $[0,1]$, \code{0.0} & the noise level $\varepsilon$.\\
+eps\_up & float in $[0,1]$, \code{0.5} & share of noise that moves a score up.\\
+eps\_down & float in $[0,1]$, \code{0.5} & share of noise that moves a score down.\\
+\end{params}
+
+\exh
+\ex{noise}

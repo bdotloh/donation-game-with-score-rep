@@ -1,0 +1,18 @@
+\begin{lstlisting}[style=code]
+from engine import LEADING_EIGHT, MONEY, ScoringNorm
+
+for n in LEADING_EIGHT[:3]:
+    print(n.title, "|", n.barcode, "|", n.strategy)
+stern = LEADING_EIGHT[5]
+print(stern.title, stern.norm().barcode)         # the ScoringNorm
+print(stern.norm(tau=2).barcode)                 # lifted to ternary classes
+print(MONEY.title, MONEY.barcode, MONEY.strategy)
+\end{lstlisting}
+\begin{lstlisting}[style=output]
+L1 | CN:00+00-+0 NC:00000000 | g,0|g,g
+L2 Consistent Standing | CN:00+-0-+0 NC:00000000 | g,0|g,g
+L3 Simple Standing | CN:+0+00-+0 NC:00000000 | 0,0|g,g
+L6 Stern Judging CN:+00-0-+0 NC:00000000
+CN:+000--0--+000--+00 NC:000000000000000000
+$ Money CN:000000++ NC:000000-- 0,0|g,g
+\end{lstlisting}

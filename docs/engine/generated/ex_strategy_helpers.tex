@@ -1,0 +1,17 @@
+\begin{lstlisting}[style=code]
+from engine import (Defectors, Discriminators, all_binary_strategies, all_ternary_strategies,
+                    strategy_from_name)
+
+print(Defectors().name, Discriminators().name)
+print(len(all_binary_strategies()), len(all_ternary_strategies(tau=2)))
+print(strategy_from_name("0,g|0.5,g").name)
+print(strategy_from_name("0,0,0|0,g,0.5|0,g,g (tau=2)").name)
+print(strategy_from_name("phi:0.5,p0=0.2").name)
+\end{lstlisting}
+\begin{lstlisting}[style=output]
+0,0|0,0 0,0|0,g
+16 512
+0,g|0.5,g
+0,0,0|0,g,0.5|0,g,g (tau=2)
+phi-Disc(phi=0.5,p0=0.2)
+\end{lstlisting}

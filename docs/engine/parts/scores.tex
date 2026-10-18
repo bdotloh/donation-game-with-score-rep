@@ -1,0 +1,160 @@
+\section{Score dynamics: from strategies and a norm to stable score distributions}\label{ch:scores}
+
+\subsection{Population}\label{sec:population}\emph{module} \code{engine/population.py}
+
+\subsubsection{\texttt{Population} and \texttt{score\_array}}
+
+\whatit
+\code{Population} is a list of strategies with their frequencies $\rho$. \code{score\_array} turns the \emph{initial} score
+distributions into the array $w$ that the score dynamics work on.
+
+\howit
+\code{Population} checks that $\rho$ has one non-negative entry per strategy and sums to 1 (equal frequencies by
+default). \code{score\_array} accepts either one distribution, shared by all $n$ strategies, or one per strategy,
+pads them with zeros to a common length $L$ and checks that each is non-negative and sums to 1; it returns the
+$n\times L$ array \code{w[i, j]}.
+
+\paramsh
+\begin{params}
+strategies & list of \code{Strategy} & the strategies; at least one.\\
+rho & array of $n$ floats, default equal & the frequencies; must sum to 1.\\
+w\_init & 1-D or 2-D array-like & \code{score\_array(w\_init, n)}: one distribution, or one row per strategy.\\
+\end{params}
+Attributes: \code{strategies}, \code{rho}, \code{n}.
+
+\exh
+\ex{population}
+
+%--------------------------------------------------------------------------
+\subsection{Transition rates}\label{sec:rates}\emph{module} \code{engine/rates.py}
+
+\subsubsection{\texttt{role\_factor}}
+
+\whatit
+The probability $\kappa=q(1-q)$ that a given ordered pair of roles (this individual Can, the other Need) occurs, when each
+individual can help with probability $q$. \code{ROLE\_FACTOR}${}=0.25$ is the value for $q=\tfrac12$.
+
+\paramsh
+\begin{params}
+q & float in $(0,1)$ & the probability that an individual can help. \code{ValueError} otherwise.\\
+\end{params}
+
+\subsubsection{\texttt{TransitionRates} and \texttt{Rates}}
+
+\whatit
+Given a population and its current score distributions, computes the rates at which a score of each strategy moves up and
+down: $G,F$ from interactions alone, and $g,f$ with noise. Returns them in a \code{Rates} record.
+
+\howit
+Take an individual of strategy $i$ with score $s$. Let $x(\cdot)$ be a score's class under the norm, and let
+\[
+ W_c=\text{mass of the population in class } c,\qquad
+ B_{c,x}=\sum_k\rho_k\sum_{d\in x} w^{(k)}_d\,h_k(c,d)
+\]
+(the mass of Cans in norm class $x$ who help a Need of class $c$), and $M_x=\sum_k\rho_k\sum_{d\in x}w^{(k)}_d$.
+\begin{itemize}
+\item \emph{As the Can}, it meets a Need of class $c$ with probability $W_c$ and helps with probability $h_i(c,s)$. Its
+score goes up with probability
+$U^{\mathrm{can}}_s=\sum_c W_c\bigl[(1-h_i(c,s))\,[CN_{c,0,x(s)}=+1]+h_i(c,s)\,[CN_{c,1,x(s)}=+1]\bigr]$ and down with $D^{\mathrm{can}}_s$,
+the same with $-1$.
+\item \emph{As the Need}, in class $a=x(s)$, it meets a Can of class $x$ who helps with total weight $B_{a,x}$ and declines
+with weight $M_x-B_{a,x}$:
+$U^{\mathrm{need}}_s=\sum_x\bigl[(M_x-B_{a,x})\,[NC_{a,0,x}=+1]+B_{a,x}\,[NC_{a,1,x}=+1]\bigr]$, and $D^{\mathrm{need}}_s$ with $-1$.
+\end{itemize}
+The rates are the role factor times the sums:
+\[
+ G^{(i)}_{s+1}=\kappa\,(U^{\mathrm{can}}_s+U^{\mathrm{need}}_s),\qquad
+ F^{(i)}_{s}=\kappa\,(D^{\mathrm{can}}_s+D^{\mathrm{need}}_s),
+\]
+and with noise $g=(1-\varepsilon)G+\varepsilon\varepsilon_\uparrow$, $f=(1-\varepsilon)F+\varepsilon\varepsilon_\downarrow$
+(with $g_0=f_0=0$). The code does not loop over scores and classes: it works on the coarsest partition of the scores that
+refines the norm's classes and every strategy's receiver classes, so each call is a few array operations whatever the
+strategies are, and the class tables are cached per set of strategies.
+
+\paramsh
+\begin{params}
+norm & \code{ScoringNorm} & the update rule.\\
+noise & \code{Noise} & the noise.\\
+role\_factor & float, \code{0.25} & $\kappa$ (see \code{role\_factor(q)}).\\
+population & \code{Population} & the call \code{rates(population, w)}.\\
+w & array $(n,L)$ & the current score distributions; the top score should be empty (see \code{chain.extend}).\\
+\end{params}
+The returned \code{Rates} holds \code{G} and \code{g} of shape $(n,L+1)$ and \code{F} and \code{f} of shape $(n,L)$.
+
+\exh
+\ex{rates}
+
+%--------------------------------------------------------------------------
+\subsection{The birth--death chain}\label{sec:chain}\emph{module} \code{engine/chain.py}
+
+\subsubsection{\texttt{extend}, \texttt{change}, \texttt{stationary}}
+
+\whatit
+\code{change} gives the change of the score distributions in one step of the chain, \code{extend} makes room for mass to
+move up, and \code{stationary} gives the stationary distribution of a chain whose rates do not change.
+
+\howit
+With the rates of section~\ref{sec:rates}, the change of $w_j$ in one step is
+\[
+ \Delta w_j=-w_j\,(g_{j+1}+f_j)+w_{j-1}\,g_j+w_{j+1}\,f_{j+1}
+\]
+(outflow up and down, inflow from below and from above), which sums to zero. It needs the top score to be empty so
+that the up-flow has somewhere to go: \code{extend} appends an empty score when the top one has mass. For constant
+rates detailed balance gives the stationary distribution $\pi_j\propto\prod_{s=1}^{j} g_s/f_s$, computed with logarithms
+for stability and normalised.
+
+\paramsh
+\begin{params}
+w & array $(n,L)$ & score distributions (\code{change} needs \code{w[:, -1]} to be 0).\\
+g & array $(n,L+1)$ & up-rates, \code{g[:, j]} from $j-1$ to $j$.\\
+f & array $(n,L)$ & down-rates, \code{f[:, j]} from $j$ to $j-1$.\\
+g, f & 1-D arrays of equal length $S+1$ & \code{stationary(g, f)}: all entries from index 1 positive.\\
+\end{params}
+
+\exh
+\ex{chain}
+
+%--------------------------------------------------------------------------
+\subsection{Stable score distributions}\label{sec:solver}\emph{module} \code{engine/solver.py}
+
+\subsubsection{\texttt{StableScoreSolver} and \texttt{StableScores}}
+
+\whatit
+Finds the stable score distribution of every strategy in a population, by running all the score chains together until
+they stop changing. Returns a \code{StableScores} record.
+
+\howit
+Because each chain's rates depend on every strategy's distribution, the chains are stepped together:
+\begin{enumerate}
+\item Start from \code{w = score\_array(w\_init)}.
+\item Repeat up to \code{max\_iter} times: \code{extend} $w$; compute the rates from it; add the change
+($w\leftarrow w+\Delta w$, one unit of time); renormalise each row to sum 1; if \code{tail\_tol}${}>0$ drop the top
+scores whose mass is below it in every chain.
+\item Stop early when $\max|\Delta w|\le$\code{tol} (\emph{converged}), or when every chain has lost all its mass in its initial
+scores (\emph{transient}: the chain has left where it started and keeps spreading), unless \code{force\_max\_iter}.
+\end{enumerate}
+The score range grows as needed; there is no maximum score. At the end the solver checks for \emph{drift}: above the
+highest class cutoff the rates no longer change with the score, so if the up-rate at the top score is at least the
+down-rate there is no stable distribution, however small the last change was. Then \code{converged} is false.
+The record keeps \code{w} (the result), \code{w\_prev} (the distributions the last rates were computed from) and
+\code{rates} (those rates).
+
+\paramsh
+\begin{params}
+norm & \code{ScoringNorm} & the update rule.\\
+noise & \code{Noise}, default \code{Noise()} & the noise.\\
+tol & float, \code{1e-5} & converged when the largest change in one step is at most this.\\
+max\_iter & int, \code{10000} & the most steps.\\
+stop\_when\_transient & bool, \code{True} & stop when every chain has left its initial scores.\\
+force\_max\_iter & bool, \code{False} & never stop early: always take \code{max\_iter} steps.\\
+record\_history & bool, \code{False} & keep \code{(w, rates)} after every step in \code{history}.\\
+role\_factor & float, \code{0.25} & $\kappa$.\\
+tail\_tol & float, \code{0.0} & if positive, drop top scores with mass below it (keeps long runs short).\\
+population, w\_init & & the call \code{solver(population, w\_init)}.\\
+\end{params}
+\code{solver.with\_options(**options)} returns a copy with \code{tol}, \code{max\_iter}, \dots{} changed (not the norm, noise
+or role factor). The result has: \code{w} $(n\times L)$, \code{w0} (the fraction with score 0), \code{w\_prev}, \code{rates},
+\code{n\_iter}, \code{converged}, \code{transient}, \code{drifting} (one flag per strategy), \code{history}.
+
+\exh
+\ex{solver}

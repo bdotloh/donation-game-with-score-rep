@@ -1,0 +1,18 @@
+\begin{lstlisting}[style=code]
+from engine import PhiDisc
+
+never = PhiDisc(phi=1)
+print(never.name)
+print(never.donor_help(5)[1])        # receiver with a score: j^-1 for a donor with score j, 0 at j = 0
+sometimes = PhiDisc(phi=1, p0=0.3)   # a donor with score 0 helps with probability 0.3
+print(sometimes.name)
+print(sometimes.donor_help(5)[1])
+print(sometimes.donor_help(5)[0])    # a receiver with score 0 is never helped
+\end{lstlisting}
+\begin{lstlisting}[style=output]
+phi-Disc(phi=1)
+[0.         1.         0.5        0.33333333 0.25      ]
+phi-Disc(phi=1,p0=0.3)
+[0.3        1.         0.5        0.33333333 0.25      ]
+[0. 0. 0. 0. 0.]
+\end{lstlisting}

@@ -13,3 +13,7 @@ out/
 
 # saved results of the GUI
 saved_results/
+docs/engine/*.aux
+docs/engine/*.log
+docs/engine/*.out
+docs/engine/*.toc

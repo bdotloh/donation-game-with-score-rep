@@ -1,0 +1,75 @@
+\section{The model and how the engine is organised}
+
+\subsection{The model in one page}
+
+\paragraph{The game.} Individuals meet in pairs. In each meeting one is the \emph{Can} (the donor) and the other the
+\emph{Need} (the receiver): each individual can help with probability $q$, a given ordered assignment of the two roles
+therefore has probability $\kappa = q(1-q)$ (the \emph{role factor}, $1/4$ for $q=\tfrac12$). The donor chooses whether to
+help. Helping costs the donor $c$ and gives the receiver $b$.
+
+\paragraph{Scores.} Every individual has an integer score $j\in\{0,1,2,\dots\}$ (a reputation; there is no cap).
+After a meeting the \emph{scoring norm} changes the donor's score, and the receiver's, by $-1$, $0$ or $+1$, depending on
+whether help was given and on the \emph{classes} of the two scores. A class is a set of scores: for binary norms
+$s=0$ and $s\ge 1$, for ternary norms $s=0$, $0<s\le\tau$ and $s>\tau$. A score of $0$ cannot go down.
+
+\paragraph{Strategies.} A strategy says with which probability a donor helps. It may depend on the receiver's class
+and on the donor's own score. A population holds $n$ strategies with frequencies $\rho_i$ (summing to 1). Each strategy
+$i$ has its own score distribution $w^{(i)}_j$ = the fraction of its individuals with score $j$.
+
+\paragraph{Score chains.} Seen from one individual of strategy $i$, the score is a birth--death chain on $\{0,1,\dots\}$:
+it moves up from $j-1$ to $j$ at rate $g^{(i)}_j$ and down from $j$ to $j-1$ at rate $f^{(i)}_j$. The rates come from
+the norm, the strategies, who is in the population and, through noise $\varepsilon$, from random score changes. They
+depend on the score distributions of \emph{all} strategies, so the $n$ chains are run together until the distributions
+stop changing (the \emph{stable} score distributions).
+
+\paragraph{Payoffs, replicator dynamics, ESS.} With the stable distributions, the probability that a Can of
+strategy $i$ helps a Need of strategy $k$ is $H_{ik}$, and the expected payoff of strategy $i$ is
+\[
+ \pi_i \;=\; \kappa\Bigl(b\sum_k \rho_k H_{ki} \;-\; c\sum_k \rho_k H_{ik}\Bigr).
+\]
+The frequencies then evolve by the replicator equation $\dot\rho_i=\rho_i(\pi_i-\bar\pi)$, and a strategy is an
+\emph{evolutionarily stable strategy} (ESS) if a rare invader cannot do better than it.
+
+\subsection{Notation and the names in the code}
+
+\begin{center}
+\begin{tabularx}{\linewidth}{@{}llX@{}}\toprule
+symbol & in the code & meaning\\\midrule
+$j$ & \code{j}, a column of \code{w} & a score, $0,1,2,\dots$\\
+$i,k$ & a row of \code{w}, \code{rho} & a strategy\\
+$\rho_i$ & \code{rho[i]} & frequency of strategy $i$\\
+$w^{(i)}_j$ & \code{w[i, j]} & fraction of strategy $i$ with score $j$ (array of shape $n\times L$)\\
+$\kappa$ & \code{role\_factor} & $q(1-q)$, default $0.25$\\
+$G^{(i)}_j,\;F^{(i)}_j$ & \code{G[i, j]}, \code{F[i, j]} & rate $j-1\to j$ and $j\to j-1$ from interactions alone\\
+$g^{(i)}_j,\;f^{(i)}_j$ & \code{g[i, j]}, \code{f[i, j]} & the same with noise\\
+$\varepsilon,\varepsilon_\uparrow,\varepsilon_\downarrow$ & \code{eps}, \code{eps\_up}, \code{eps\_down} & noise\\
+$h_i(c,d)$ & \code{donor\_help(n)[c, d]} & probability that a donor of strategy $i$ with score $d$ helps a receiver of class $c$\\
+$H_{ik}$ & \code{H[i, k]} & probability that a Can of $i$ helps a Need of $k$\\
+$A_{ik}$ & \code{A[i, k]} & payoff matrix, $\pi=A\rho$\\
+$\pi_i$ & \code{payoffs[i]} & expected payoff of strategy $i$\\
+$b,\;c$ & \code{benefit}, \code{cost} & benefit to the receiver, cost to the donor\\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+Arrays are indexed from $0$. The rate arrays have one unused column: \code{g[:, 0]} and \code{f[:, 0]} are $0$, and
+\code{g[i, j]} (\code{G[i, j]}) is the rate \emph{into} score $j$ (so $j\ge1$), while \code{f[i, j]} (\code{F[i, j]}) is the
+rate \emph{out of} score $j$ (also $j\ge1$). For $L$ scores, \code{g} has $L+1$ columns and \code{f} has $L$.
+
+\subsection{How the pieces fit together}
+
+\begin{center}
+\begin{tabularx}{\linewidth}{@{}lXl@{}}\toprule
+chapter & pieces (module) & builds on\\\midrule
+\ref{ch:elements} Elements & score partitions (\code{partitions}), strategies (\code{strategies}), scoring norms and noise (\code{norms}, \code{known\_norms}, \code{noise}) & ---\\
+\ref{ch:scores} Score dynamics & population (\code{population}), transition rates (\code{rates}), the chain (\code{chain}), stable scores (\code{solver}) & elements\\
+\ref{ch:dynamics} Dynamics & payoffs (\code{payoffs}), replicator dynamics (\code{replicator}), the strategy simplex and rest points (\code{simplex}), ESS (\code{ess}) & score dynamics\\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+Everything is imported from the package: \code{from engine import PhiDisc, ScoringNorm, \dots}. Every example in this
+document is run when the document is built, and what is printed below it is what the engine printed.
+
+\paragraph{How each entry is laid out.} \emph{What it does}, \emph{how it does it}, its \emph{parameters} (name, type
+with the default, meaning), and an \emph{example}.

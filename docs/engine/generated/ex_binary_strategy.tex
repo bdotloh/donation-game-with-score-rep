@@ -1,0 +1,18 @@
+\begin{lstlisting}[style=code]
+from engine import BinaryStrategy
+
+disc = BinaryStrategy.from_name("0,0|0,g")   # helps only if both donor and receiver have a score
+print(disc.name)
+print(disc.P)                                # P[receiver class, donor class]
+print(disc.donor_help(4))                    # [receiver class, donor score]
+mixed = BinaryStrategy([[0, 0.5], [0.25, 1]])
+print(mixed.name)
+\end{lstlisting}
+\begin{lstlisting}[style=output]
+0,0|0,g
+[[0. 0.]
+ [0. 1.]]
+[[0. 0. 0. 0.]
+ [0. 1. 1. 1.]]
+0,0.5|0.25,g
+\end{lstlisting}

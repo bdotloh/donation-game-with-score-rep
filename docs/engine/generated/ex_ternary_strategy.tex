@@ -1,0 +1,15 @@
+\begin{lstlisting}[style=code]
+from engine import TernaryStrategy
+
+s = TernaryStrategy.from_name("0,0,0|0,g,0.5|0,g,g", tau=2)
+print(s.name)
+print(s.partition.classify([0, 1, 2, 3, 4]))
+print(s.donor_help(5))                       # rows: receiver in class 0, 1, 2
+\end{lstlisting}
+\begin{lstlisting}[style=output]
+0,0,0|0,g,0.5|0,g,g (tau=2)
+[0 1 1 2 2]
+[[0.  0.  0.  0.  0. ]
+ [0.  1.  1.  0.5 0.5]
+ [0.  1.  1.  1.  1. ]]
+\end{lstlisting}

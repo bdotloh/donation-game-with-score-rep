@@ -1,0 +1,17 @@
+\begin{lstlisting}[style=code]
+import numpy as np
+from engine import Noise, PhiDisc, Population, ScoringNorm, StableScoreSolver
+
+np.set_printoptions(precision=4, suppress=True)
+norm = ScoringNorm.from_barcode("CN:00000-0+ NC:00000000")
+solver = StableScoreSolver(norm, Noise(eps=0.1, eps_up=0.3, eps_down=0.7), tol=1e-10, max_iter=5000)
+result = solver(Population([PhiDisc(1)]), [0.5, 0.5])
+print(result.converged, result.drifting, result.n_iter)
+print(result.w[0][:6])
+print(result.w.sum(), result.w0)
+\end{lstlisting}
+\begin{lstlisting}[style=output]
+True [False] 622
+[0.4066 0.1743 0.2083 0.1268 0.0555 0.0199]
+1.0 [0.4066]
+\end{lstlisting}

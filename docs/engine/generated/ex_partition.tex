@@ -1,0 +1,13 @@
+\begin{lstlisting}[style=code]
+from engine import TernaryPartition
+
+p = TernaryPartition(3)                 # classes: s = 0 | s = 1, 2, 3 | s >= 4
+print(p.cutoffs, p.n_classes)
+print(p.classify([0, 1, 3, 4, 10]))     # class index of each score
+print(p.class_masses([0.2, 0.3, 0.1, 0.1, 0.1, 0.2]))
+\end{lstlisting}
+\begin{lstlisting}[style=output]
+(1, 4) 3
+[0 1 1 2 2]
+[0.2 0.5 0.3]
+\end{lstlisting}
