@@ -1,0 +1,13 @@
+\begin{lstlisting}[style=code]
+from engine import (ESSFinder, Noise, Payoffs, ScoringNorm, StableScoreSolver, all_binary_strategies)
+
+norm = ScoringNorm.from_barcode("CN:00000-00 NC:00000000")      # lose a score for declining a receiver with a score
+solver = StableScoreSolver(norm, Noise(eps=0.01), tol=1e-5, max_iter=100)
+strategies = all_binary_strategies()
+finder = ESSFinder(solver, Payoffs(), rho=0.99)
+ess = finder(strategies, strategies, w_init=[0.5, 0.5])
+print([s.name for s in ess])
+\end{lstlisting}
+\begin{lstlisting}[style=output]
+['0,0|0,g']
+\end{lstlisting}

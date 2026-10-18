@@ -1,0 +1,19 @@
+\begin{lstlisting}[style=code]
+import numpy as np
+from engine import chain
+
+np.set_printoptions(precision=4, suppress=True)
+w = np.array([[0.5, 0.3, 0.2]])
+w = chain.extend(w)                              # mass at the top score, so an empty score is added above it
+print(w)
+g = np.array([[0.0, 0.4, 0.3, 0.2, 0.1]])        # g[j]: rate j-1 -> j (g[0] unused), one more than w has scores
+f = np.array([[0.0, 0.1, 0.2, 0.3]])             # f[j]: rate j -> j-1 (f[0] unused)
+dw = chain.change(w, g, f)
+print(dw, dw.sum())                              # the change sums to 0: probability is conserved
+print(chain.stationary([0.0, 0.4, 0.3, 0.2], [0.0, 0.1, 0.2, 0.3]))   # stationary distribution of a fixed chain
+\end{lstlisting}
+\begin{lstlisting}[style=output]
+[[0.5 0.3 0.2 0. ]]
+[[-0.17  0.12  0.01  0.04]] 0.0
+[0.0667 0.2667 0.4    0.2667]
+\end{lstlisting}

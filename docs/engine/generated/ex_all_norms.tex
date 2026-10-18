@@ -1,0 +1,11 @@
+\begin{lstlisting}[style=code]
+from engine import all_norms
+
+norms = list(all_norms(use_NC=False))   # every binary norm that only changes the donor
+print(len(norms), norms[0].barcode)
+print(norms[-1].barcode)
+\end{lstlisting}
+\begin{lstlisting}[style=output]
+1296 CN:0-0-0-0- NC:00000000
+CN:++++++++ NC:00000000
+\end{lstlisting}

@@ -1,0 +1,44 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[margin=2.4cm]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs,tabularx,xcolor,enumitem}
+\usepackage{listings}
+\usepackage[colorlinks=true,linkcolor=blue!40!black,urlcolor=blue!40!black]{hyperref}
+
+\definecolor{codebg}{gray}{0.96}
+\definecolor{outbg}{rgb}{0.93,0.96,0.99}
+\lstdefinestyle{code}{language=Python,basicstyle=\ttfamily\footnotesize,backgroundcolor=\color{codebg},
+  keywordstyle=\color{blue!50!black},commentstyle=\color{green!35!black},frame=single,rulecolor=\color{black!15},
+  breaklines=true,columns=fullflexible,keepspaces=true,showstringspaces=false,aboveskip=4pt,belowskip=0pt}
+\lstdefinestyle{output}{basicstyle=\ttfamily\footnotesize,backgroundcolor=\color{outbg},frame=single,
+  rulecolor=\color{black!15},breaklines=true,columns=fullflexible,keepspaces=true,aboveskip=0pt,belowskip=6pt}
+
+\newcommand{\code}[1]{\texttt{#1}}
+\newcommand{\ex}[1]{\input{generated/ex_#1.tex}}
+\newcommand{\whatit}{\paragraph{What it does.}}
+\newcommand{\howit}{\paragraph{How it does it.}}
+\newcommand{\paramsh}{\par\medskip\noindent\textbf{Parameters.}\par\nopagebreak}
+\newcommand{\exh}{\par\medskip\noindent\textbf{Example.}\par\nopagebreak}
+\newenvironment{params}{\par\smallskip\noindent\tabularx{\linewidth}{@{}>{\ttfamily}l>{\raggedright}p{3.1cm}X@{}}\toprule
+  \textrm{name}&\textrm{type, default}&\textrm{meaning}\\\midrule}{\\\bottomrule\endtabularx\par\smallskip}
+\renewcommand{\arraystretch}{1.1}
+\setlist{nosep}
+\setcounter{secnumdepth}{3}
+\setcounter{tocdepth}{2}
+
+\title{The engine of the donation game with scores\\[2pt]\large What each piece does, how, with which parameters, and an example}
+\author{}
+\date{\today}
+
+\begin{document}
+\maketitle
+\tableofcontents
+
+\input{parts/intro.tex}
+\input{parts/elements.tex}
+\input{parts/scores.tex}
+\input{parts/dynamics.tex}
+\input{parts/appendix.tex}
+\end{document}

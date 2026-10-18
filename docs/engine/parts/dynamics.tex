@@ -1,0 +1,180 @@
+\section{Dynamics: payoffs, replicator dynamics, rest points and ESS}\label{ch:dynamics}
+
+\subsection{Payoffs}\label{sec:payoffs}\emph{module} \code{engine/payoffs.py}
+
+\subsubsection{\texttt{Payoffs}}
+
+\whatit
+Turns score distributions into expected payoffs: the probability that a Can of one strategy helps a Need of another, and
+from it each strategy's payoff in the donation game.
+
+\howit
+Let $P_k(c)$ be the fraction of strategy $k$ whose score is in class $c$. The probability that a Can of strategy $i$
+helps a Need of strategy $k$ is
+\[
+ H_{ik}=\sum_{c}\sum_{d} P_k(c)\;h_i(c,d)\;w^{(i)}_d ,
+\]
+computed with one \code{einsum} over classes and scores. A Can of $i$ helping a Need of $k$ costs $c$ to $i$ and gives $b$
+to $k$, so with the role factor $\kappa$
+\[
+ \pi_i=\kappa\Bigl(b\sum_k\rho_k H_{ki}-c\sum_k\rho_k H_{ik}\Bigr)
+\]
+(``helped by Cans of every strategy'' minus ``cost of helping Needs of every strategy''); this is the payoff per
+interaction, role factor included.
+
+\paramsh
+\begin{params}
+benefit & float, \code{2.0} & $b$, what a receiver gains.\\
+cost & float, \code{1.0} & $c$, what a donor pays.\\
+role\_factor & float, \code{0.25} & $\kappa$.\\
+population, w & & \code{help\_probabilities(population, w)} returns $H$; \code{payoffs(population, w)} returns $\pi$ ($w$: the $n\times L$ score distributions).\\
+\end{params}
+
+\exh
+\ex{payoffs}
+
+%--------------------------------------------------------------------------
+\subsection{Replicator dynamics}\label{sec:replicator}\emph{module} \code{engine/replicator.py}
+
+\subsubsection{\texttt{ReplicatorDynamics} and \texttt{Trajectory}}
+
+\whatit
+Evolves the strategy frequencies by the replicator equation
+\[
+ \dot\rho_i=\rho_i\,(\pi_i-\bar\pi),\qquad \pi=A\rho,\ \ \bar\pi=\rho\cdot\pi,\qquad A_{ik}=\kappa\,(b\,H_{ki}-c\,H_{ik}),
+\]
+with the score distributions evolving underneath, and returns the path as a \code{Trajectory}.
+
+\howit
+\code{payoff\_matrix(population, w)} gives $A$ and \code{velocity(population, w)} gives $(\dot\rho,\pi)$. \code{run} then
+repeats, for \code{n\_steps} $+1$ states: solve the score chains for the current $\rho$ (section~\ref{sec:solver}),
+record $\rho$, the payoffs, the fraction at score 0 and the mean score, compute $\dot\rho$, and take an Euler step
+$\rho\leftarrow\rho+\mathrm{dt}\,\dot\rho$, clipped at $0$ (a strategy that overshoots is extinct) and renormalised.
+It stops early at a \emph{rest point}, when $\max|\dot\rho|\le$ \code{rest\_tol}. Time is \code{step}$\cdot$\code{dt}.
+At every step the chains are restarted from \code{w\_init}, so the payoffs are a function of $\rho$ alone; when the chains
+do not converge (\code{scores\_converged} is false) the payoffs are those after the solver's \code{max\_iter} steps and so
+depend on \code{w\_init} and \code{max\_iter}. With \code{warm\_start=True} each step continues from the previous step's
+distributions instead.
+
+\paramsh
+\begin{params}
+solver & \code{StableScoreSolver} & solves the score chains at each step; its \code{tol} and \code{max\_iter} apply.\\
+payoffs & \code{Payoffs} & benefit, cost and role factor.\\
+dt & float, \code{0.1} & the Euler step of $\rho$.\\
+warm\_start & bool, \code{False} & continue the score chains from the previous step.\\
+rest\_tol & float, \code{1e-9} & stop when $\max|\dot\rho|$ falls to this.\\
+strategies, rho, w\_init & & \code{run(strategies, rho, w\_init, n\_steps, record\_scores=False, progress=None)}: the strategies, the starting frequencies, the initial score distribution(s), the number of steps; \code{record\_scores} keeps every score distribution in \code{Trajectory.w}; \code{progress(done, total)} is called after each step.\\
+\end{params}
+\code{Trajectory}: \code{t}, \code{rho}, \code{payoffs}, \code{w0}, \code{mean\_score} (one row per recorded state),
+\code{scores\_converged}, \code{at\_rest}, \code{w}, \code{mean\_payoff}.
+
+\exh
+\ex{replicator}
+
+%--------------------------------------------------------------------------
+\subsection{The strategy simplex and its rest points}\label{sec:simplex}\emph{module} \code{engine/simplex.py}
+
+\subsubsection{\texttt{ReplicatorField}, \texttt{PointResult}}
+
+\whatit
+Evaluates the replicator's velocity $\dot\rho$ at \emph{any} point $\rho$ of the simplex, with the payoffs, helping
+probabilities and score distributions behind it, one point at a time or many in parallel. This is what the arrows of
+the phase portrait are made of.
+
+\howit
+\code{evaluate(rho)} solves the score chains for that $\rho$ (restarting from \code{w\_init}, as \code{run} does), then
+computes $A$, $\pi$, $\dot\rho=\rho(\pi-\rho\cdot\pi)$ and $H$ and returns them in a \code{PointResult}.
+\code{evaluate\_many} spreads the points over worker processes (the field is sent to each worker once, so it must be picklable;
+with the \code{spawn} start method the calling script needs an \code{if \_\_name\_\_ == "\_\_main\_\_":} guard).
+
+\paramsh
+\begin{params}
+dynamics & \code{ReplicatorDynamics} & provides the solver and the payoffs.\\
+strategies & list of \code{Strategy} & the $n$ strategies.\\
+w\_init & array-like & the initial score distribution(s).\\
+rho & array of $n$ floats & \code{evaluate(rho)}, \code{velocity(rho)}.\\
+points, n\_jobs, progress & list, int or \code{None}, callable & \code{evaluate\_many}: the points; the number of processes (\code{None}: one per CPU, 1: this process); \code{progress(done, total)}.\\
+\end{params}
+\code{PointResult}: \code{rho}, \code{velocity}, \code{payoffs}, \code{payoff\_matrix}, \code{help\_matrix}, \code{w}, \code{converged}.
+\code{velocity(rho)} returns \code{(velocity, converged)}.
+
+\subsubsection{\texttt{simplex\_grid}}
+
+\whatit
+A regular grid of points on the simplex.
+
+\howit
+All $n$ non-negative integer counts that sum to \code{resolution}, divided by \code{resolution}. For $n=2$ the points run evenly
+from $e_1$ to $e_2$.
+
+\paramsh
+\begin{params}
+n & int $\ge1$ & the number of strategies.\\
+resolution & int $\ge1$ & points per side.\\
+\end{params}
+
+\subsubsection{\texttt{find\_rest\_points} and \texttt{RestPoint}}
+
+\whatit
+Finds the rest points of a velocity field on the simplex (for $n=2$ or $3$) and says whether each is stable, unstable, a
+saddle or neutral.
+
+\howit
+Vertices are always rest points. On an edge, a rest point is a sign change of $\pi_b-\pi_a=v_b/(\rho_a\rho_b)$ between
+grid points, refined by Brent's method. Inside the triangle ($n=3$) a rest point starts from a grid cell where
+$\pi_1-\pi_3$ and $\pi_2-\pi_3$ both change sign and is refined by Newton's method. Stability comes from the
+eigenvalues of the Jacobian of the replicator restricted to the simplex, taken by finite differences placed so that
+every point evaluated stays in the simplex: along a face, central differences; off the face, forward differences, which
+equal the \emph{invasion fitness} $\pi_k-\bar\pi$ of the missing strategy $k$. The type is \code{stable} if every
+real part is below $-$tolerance, \code{unstable} if every one is above it, \code{saddle} if both occur and
+\code{neutral} otherwise. Segments or curves of rest points are not reported, except where a curve meets an edge.
+
+\paramsh
+\begin{params}
+velocity\_fn & callable & \code{velocity\_fn(rho)} $\to$ \code{(velocity, converged)}, e.g. \code{field.velocity}.\\
+n & 2 or 3 & the number of strategies.\\
+resolution & int, \code{20} & grid used if \code{grid} is not given.\\
+grid, grid\_velocities, grid\_converged & arrays, optional & a grid already evaluated (any resolution, any order), to avoid evaluating it again.\\
+xtol & float, \code{1e-6} & precision of the root finding.\\
+neutral\_tol & float, \code{1e-7} & eigenvalues smaller than this (or than twice their estimated error) count as zero; use about ten times the solver's \code{tol} for engine fields.\\
+\end{params}
+Each \code{RestPoint} has \code{rho}, \code{kind} (\code{stable}, \code{unstable}, \code{saddle}, \code{neutral}),
+\code{eigenvalues}, \code{location} (\code{vertex}, \code{edge}, \code{interior}) and \code{converged}.
+
+\exh
+\ex{field}
+
+%--------------------------------------------------------------------------
+\subsection{Evolutionarily stable strategies}\label{sec:ess}\emph{module} \code{engine/ess.py}
+
+\subsubsection{\texttt{ESSFinder}}
+
+\whatit
+Picks out, from a list of candidate strategies, those that are evolutionarily stable against a list of invaders.
+
+\howit
+Maynard Smith and Price: $A$ is an ESS if for every other strategy $B$ either $E(A,A)>E(B,A)$ (a rare $B$ does worse
+than the common $A$), or $E(A,A)=E(B,A)$ and $E(A,B)>E(B,B)$. The finder tests this with a resident $A$ at frequency
+$\rho$ (default $0.99$) against an invader $B$ at $1-\rho$, using the payoffs of the two-strategy population
+(section~\ref{sec:payoffs}, from the stable score distributions at the final step):
+\begin{enumerate}
+\item Skip a candidate that earns almost nothing alone ($4\pi<$ \code{fitness\_threshold}): never-helping populations
+are not interesting ESS.
+\item For every invader $B$ of another name: if $A$'s payoff is higher, go on; if lower, $A$ is not an ESS; if equal,
+swap the frequencies and require that $A$ does not do worse than $B$.
+\item Finally require $\pi_A\ge10^{-5}$ for the candidate alone with the solver restricted to \code{final\_max\_iter} steps.
+\end{enumerate}
+
+\paramsh
+\begin{params}
+solver & \code{StableScoreSolver} & used for every population.\\
+payoffs & \code{Payoffs} & benefit, cost, role factor.\\
+rho & float, \code{0.99} & frequency of the resident when tested against an invader.\\
+fitness\_threshold & float, \code{1e-5} & candidates whose $4\times$ payoff alone is below this are skipped.\\
+final\_max\_iter & int, \code{100} & \code{max\_iter} of the last check.\\
+candidates, invaders, w\_init & & \code{finder(candidates, invaders, w\_init)} returns the candidates that are ESS against every invader; \code{is\_ess(A, invaders, w\_init)} tests one.\\
+\end{params}
+Also \code{payoff\_alone(strategy, w\_init)} and \code{payoffs\_against(A, B, rho\_A, w\_init)}.
+
+\exh
+\ex{ess}

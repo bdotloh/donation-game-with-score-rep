@@ -1,0 +1,21 @@
+\begin{lstlisting}[style=code]
+import numpy as np
+from engine import Noise, PhiDisc, Population, ScoringNorm, TransitionRates
+
+norm = ScoringNorm.from_barcode("CN:00000-0+ NC:00000000")
+rates = TransitionRates(norm, Noise(eps=0.1))
+pop = Population([PhiDisc(1)])
+w = np.array([[0.5, 0.3, 0.2, 0.0]])             # score distribution, last score empty
+r = rates(pop, w)
+np.set_printoptions(precision=4, suppress=True)
+print("G", r.G[0])     # G[j]: rate j-1 -> j from interactions
+print("F", r.F[0])     # F[j]: rate j -> j-1
+print("g", r.g[0])     # with noise
+print("f", r.f[0])
+\end{lstlisting}
+\begin{lstlisting}[style=output]
+G [0.     0.     0.125  0.0625 0.0417]
+F [0.     0.     0.0625 0.0833]
+g [0.     0.05   0.1625 0.1063 0.0875]
+f [0.     0.05   0.1063 0.125 ]
+\end{lstlisting}

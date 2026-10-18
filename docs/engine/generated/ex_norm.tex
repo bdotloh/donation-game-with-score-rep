@@ -1,0 +1,17 @@
+\begin{lstlisting}[style=code]
+from engine import ScoringNorm
+
+norm = ScoringNorm.from_barcode("CN:00000-00 NC:00000000")
+print(norm.barcode, norm.is_ternary)
+# CN[receiver class, act, donor class]; act 0 = declines, 1 = gives
+print(norm.CN[1, 0, 1])      # a donor with a score who declines a receiver with a score: -1
+print(norm.CN[1, 1, 1])      # ... who gives: 0
+tern = norm.to_ternary(tau=2)
+print(tern.barcode, tern.partition)
+\end{lstlisting}
+\begin{lstlisting}[style=output]
+CN:00000-00 NC:00000000 False
+-1
+0
+CN:0000000--0000--000 NC:000000000000000000 TernaryPartition(tau=2)
+\end{lstlisting}

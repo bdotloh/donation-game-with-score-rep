@@ -1,0 +1,17 @@
+\appendix
+\section{Where the pieces are used, and how to rebuild this document}
+
+\begin{center}
+\begin{tabularx}{\linewidth}{@{}lX@{}}\toprule
+where & uses\\\midrule
+\code{gui/} & the local web GUI: strategies, parameters, results. Builds the strategies and norm from the settings (\code{gui/spec.py}), runs a \code{ReplicatorField} over the simplex and \code{find\_rest\_points}, and a \code{ReplicatorDynamics} run from a chosen point.\\
+\code{scripts/ess\_sweep.py} & the ESS search over many norms with \code{ESSFinder}, one task per norm (Slurm-friendly); \code{scripts/plot\_ess.py} plots its result.\\
+\code{experiments/} & older scripts moved onto the engine.\\
+\code{tests/} & the engine against independent re-implementations, an agent-based simulation and hand calculations; \code{docs/verification/} reports these.\\
+\bottomrule
+\end{tabularx}
+\end{center}
+
+\paragraph{Rebuild.} The examples are in \code{docs/engine/examples.py}; \code{python docs/engine/build\_docs.py} runs them,
+writes their code and output into \code{docs/engine/generated/} and compiles \code{engine.tex}.
+\code{tests/test\_docs.py} runs every example, so an example that stops working fails the tests.

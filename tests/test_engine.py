@@ -282,3 +282,46 @@ def test_noise_rejects_up_and_down_rates_that_add_to_more_than_one():
     for bad in ((1, 1, 1), (0.1, 0.6, 0.6), (0.1, 0.5, 0.5000001)):
         with pytest.raises(ValueError, match="eps_up"):
             Noise(*bad)
+
+
+def test_phi_disc_can_help_at_score_zero():
+    from engine import strategy_from_name
+
+    never = PhiDisc(phi=2)
+    sometimes = PhiDisc(phi=2, p0=0.3)
+    assert never.donor_help(4)[1, 0] == 0 and never.p0 == 0 and never.name == "phi-Disc(phi=2)"
+    help_ = sometimes.donor_help(4)
+    np.testing.assert_allclose(help_[1], [0.3, 1, 0.25, 1 / 9])                  # score 0: p0; score j: j^-phi
+    np.testing.assert_array_equal(help_[0], 0)                                  # a receiver with score 0 is never helped
+    assert sometimes.name == "phi-Disc(phi=2,p0=0.3)"
+    for text in ("phi:2,p0=0.3", "phi-Disc(phi=2,p0=0.3)"):
+        assert strategy_from_name(text).p0 == 0.3 and strategy_from_name(text).phi == 2
+    assert strategy_from_name("phi:2").p0 == 0 and strategy_from_name(never.name).phi == 2
+    for bad in ("phi:2,q=1", "phi:2,p0=0.1,p0=0.2"):
+        with pytest.raises(ValueError):
+            strategy_from_name(bad)
+    for p0 in (-0.1, 1.5):
+        with pytest.raises(ValueError):
+            PhiDisc(1, p0=p0)
+    # the donor's help probabilities cover every score, however far the distribution extends
+    np.testing.assert_allclose(sometimes.donor_help(50)[1, :4], help_[1])
+
+
+def test_phi_disc_help_at_score_zero_adds_exactly_that_help():
+    """Under CN:00000-0+ a donor with score 0 helping a receiver with a score changes nobody's score, so only the
+    helping rates move, by p0 * Pr(donor has score 0) * Pr(receiver has a score)."""
+    norm = ScoringNorm.from_barcode("CN:00000-0+ NC:00000000")
+    solver = StableScoreSolver(norm, Noise(0.1, 0.5, 0.5), tol=1e-10, max_iter=3000)
+    payoffs = Payoffs()
+    rho = [0.5, 0.5]
+    runs = []
+    for p0 in (0.0, 0.5):
+        population = Population([PhiDisc(1, p0), Defectors()], rho)
+        result = solver(population, [0.5, 0.5])
+        runs.append((result.w, payoffs.help_probabilities(population, result.w)))
+    (w0, H0), (w1, H1) = runs
+    np.testing.assert_allclose(w0[:, :5], w1[:, :5], atol=1e-12)               # the score distributions are the same
+    for k in range(2):
+        positive = 1 - w0[k, 0]
+        np.testing.assert_allclose(H1[0, k] - H0[0, k], 0.5 * w0[0, 0] * positive, rtol=1e-6)
+    np.testing.assert_array_equal(H1[1], 0)                                    # Defectors still never help

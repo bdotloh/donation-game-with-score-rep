@@ -1,0 +1,14 @@
+\begin{lstlisting}[style=code]
+from engine import Noise
+
+noise = Noise(eps=0.1, eps_up=0.4, eps_down=0.6)
+print(noise)
+try:
+    Noise(eps=0.1, eps_up=0.7, eps_down=0.6)
+except ValueError as error:
+    print("ValueError:", error)
+\end{lstlisting}
+\begin{lstlisting}[style=output]
+Noise(eps=0.1, eps_up=0.4, eps_down=0.6)
+ValueError: eps_up + eps_down must not exceed 1 (the notes take it to be 1); got 0.7 + 0.6.
+\end{lstlisting}

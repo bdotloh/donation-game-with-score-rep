@@ -1,0 +1,16 @@
+\begin{lstlisting}[style=code]
+from engine import Defectors, PhiDisc, Population
+from engine.population import score_array
+
+pop = Population([Defectors(), PhiDisc(1)], rho=[0.7, 0.3])
+print(pop, pop.n)
+print(score_array([0.5, 0.5], 2))                # one distribution shared by both strategies
+print(score_array([[1.0], [0.5, 0.5]], 2))       # one each, padded with zeros
+\end{lstlisting}
+\begin{lstlisting}[style=output]
+Population(0,0|0,0: 0.7, phi-Disc(phi=1): 0.3) 2
+[[0.5 0.5]
+ [0.5 0.5]]
+[[1.  0. ]
+ [0.5 0.5]]
+\end{lstlisting}

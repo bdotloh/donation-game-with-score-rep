@@ -1,0 +1,27 @@
+\begin{lstlisting}[style=code]
+import numpy as np
+from engine import (Defectors, Discriminators, Noise, Payoffs, ReplicatorDynamics, ReplicatorField, ScoringNorm,
+                    StableScoreSolver, find_rest_points, simplex_grid)
+
+np.set_printoptions(precision=4, suppress=True)
+norm = ScoringNorm.from_barcode("CN:00000-00 NC:00000000")
+solver = StableScoreSolver(norm, Noise(eps=0.01), tol=1e-8, max_iter=2000)
+strategies = [Discriminators(), Defectors()]
+field = ReplicatorField(ReplicatorDynamics(solver, Payoffs()), strategies, [0.5, 0.5])
+point = field.evaluate([0.3, 0.7])
+print(point.velocity, point.payoffs)             # d rho / dt and the payoffs at rho = (0.3, 0.7)
+print(simplex_grid(2, 4))
+for p in find_rest_points(field.velocity, n=2, resolution=8, neutral_tol=1e-6):
+    print(p.location, p.kind, p.rho)
+\end{lstlisting}
+\begin{lstlisting}[style=output]
+[ 0.0071 -0.0071] [0.042 0.008]
+[[1.   0.  ]
+ [0.75 0.25]
+ [0.5  0.5 ]
+ [0.25 0.75]
+ [0.   1.  ]]
+vertex stable [1. 0.]
+vertex stable [0. 1.]
+interior unstable [0.1307 0.8693]
+\end{lstlisting}

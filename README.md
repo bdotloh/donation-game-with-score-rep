@@ -227,3 +227,11 @@ Discriminators, a population of 1-Disc) and the ternary and probabilistic cases;
 `tests/test_simplex.py` checks rest points and their stability against games
 with known answers. `tests/test_ess_sweep.py` and `tests/test_run_markov_chain.py`
 check the scripts. `benchmarks/bench_solver.py` times the score solver.
+
+## Documentation of the engine
+
+`docs/engine/engine.pdf` (source `docs/engine/engine.tex`) documents every piece of the engine, from the elements
+(score partitions, strategies, scoring norms, noise) through the score dynamics (population, transition rates,
+the birth-death chain, stable score distributions) to payoffs, replicator dynamics, rest points and ESS. Each entry
+says what it does, how, what its parameters are, and has an example. The examples are run when the document is built
+(`python docs/engine/build_docs.py`), so the output shown is the engine's own, and `tests/test_docs.py` runs them.
