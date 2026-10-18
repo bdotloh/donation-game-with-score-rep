@@ -1,6 +1,7 @@
 """Experiment settings as plain JSON-able dicts, and their conversion to engine objects.
 
-strategy: {"type": "binary" | "ternary" | "phi", "name": str, "P": [[p, ...], ...], "tau": int, "phi": float}
+strategy: {"type": "binary" | "ternary" | "phi", "name": str, "P": [[p, ...], ...], "tau": int, "phi": float,
+           "p0": float}   (p0: phi-Disc only, the probability that a donor with score 0 helps; optional, default 0)
 norm:     {"type": "binary" | "ternary", "tau": int, "CN": "8 or 18 of -0+", "NC": "..."}
 experiment: {"version": 1, "strategies": [...], "scores": [{"score", "mass"}, ...],
              "norm": {...}, "noise": {"eps", "eps_up", "eps_down"}, "p_can", "benefit", "cost",
@@ -81,13 +82,13 @@ def build_strategy(cfg):
     if cfg["type"] == "ternary":
         return TernaryStrategy(cfg["P"], cfg["tau"])
     if cfg["type"] == "phi":
-        return PhiDisc(cfg["phi"])
+        return PhiDisc(cfg["phi"], cfg.get("p0") or 0.0)
     raise ValueError(f"Unknown strategy type {cfg['type']!r}.")
 
 
 def describe_strategy(cfg):
     if cfg["type"] == "phi":
-        return f"φ-Disc, φ = {cfg['phi']:g}"
+        return f"φ-Disc, φ = {cfg['phi']:g}" + (f", p0 = {cfg['p0']:g}" if cfg.get("p0") else "")
     strategy = build_strategy(cfg)
     text = strategy.name
     return f"{'ternary' if cfg['type'] == 'ternary' else 'binary'}: {text}"
@@ -96,7 +97,7 @@ def describe_strategy(cfg):
 def strategy_code(cfg):
     """A strategy's code on its own, e.g. 0,0|0,g (φ-Disc: φ-Disc φ=1); the cards and the simplex show it."""
     if cfg["type"] == "phi":
-        return f"φ-Disc φ={cfg['phi']:g}"
+        return f"φ-Disc φ={cfg['phi']:g}" + (f" p0={cfg['p0']:g}" if cfg.get("p0") else "")
     return build_strategy(cfg).name
 
 
@@ -166,6 +167,8 @@ def check(experiment):
                 return "A strategy in the file is not valid."
             if s["type"] == "phi" and validation.non_negative(s.get("phi"), "φ")[1]:
                 return "φ must be a number, 0 or more."
+            if s["type"] == "phi" and s.get("p0") is not None and validation.probability(s["p0"])[1]:
+                return "p0 must be a number between 0 and 1."
             if s["type"] != "phi" and any(validation.probability(p)[1] for row in s.get("P") or [] for p in row):
                 return "Each p(help) must be a number between 0 and 1."
         scores = experiment["scores"]

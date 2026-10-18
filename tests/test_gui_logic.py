@@ -463,3 +463,35 @@ def test_the_simplex_names_each_strategy_and_its_code():
     two.compute()                                                           # two strategies: a line, codes on its ends
     ticks = " ".join(two.figure.layout.xaxis.ticktext)
     assert "AllD-Disc" in ticks and "0,0|0,g" in ticks and "Defectors" in ticks and "0,0|0,0" in ticks
+
+
+def test_phi_disc_with_a_probability_at_score_zero():
+    from gui.pages.results import strategy_table
+    from gui.pages.strategies import current_strategy
+
+    cfg, error = current_strategy("phi", None, None, "1", "", "0.4")
+    assert error == "" and cfg["p0"] == 0.4 and "p0=0.4" in cfg["name"]
+    strategy = spec.build_strategy(cfg)
+    assert strategy.p0 == 0.4 and strategy.donor_help(3)[1, 0] == 0.4
+    assert spec.strategy_code(cfg) == "φ-Disc φ=1 p0=0.4" and "p0 = 0.4" in spec.describe_strategy(cfg)
+    default, _ = current_strategy("phi", None, None, "1", "", "0")
+    assert default["p0"] == 0 and "p0" not in default["name"] and spec.strategy_code(default) == "φ-Disc φ=1"
+    assert current_strategy("phi", None, None, "1", "", "")[0]["p0"] == 0              # blank means never
+    for bad in ("2", "-0.1", "abc"):
+        assert current_strategy("phi", None, None, "1", "", bad)[1]
+    # the card shows the probability for a donor with score 0
+    text = _text(strategy_table(cfg))
+    assert "0.4" in text and "donor score" in text
+    # the heat map has it in its donor score 0 column, for the receivers with a score
+    z = figures.strategy_heatmap(strategy, 3).data[0].z                              # rows receiver, columns donor
+    assert z[1][0] == 0.4 and z[0][0] == 0 and z[2][0] == 0.4
+    # settings files: p0 is optional, and checked when given
+    experiment, _ = _experiment()
+    experiment["strategies"][2] = {**cfg, "name": "phi"}
+    assert spec.check(experiment) == ""
+    experiment["strategies"][2]["p0"] = 1.5
+    assert "p0" in spec.check(experiment)
+    old = dict(cfg)
+    del old["p0"]                                                                    # a file from before p0 existed
+    experiment["strategies"][2] = {**old, "name": "phi"}
+    assert spec.check(experiment) == "" and spec.build_strategy(old).p0 == 0

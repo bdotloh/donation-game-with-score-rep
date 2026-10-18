@@ -674,14 +674,15 @@ def strategy_cards(run, surfaces=False):
 def strategy_table(cfg):
     """The decision points of a strategy: p(help) for each class of receiver and donor (phi-Disc: by donor score)."""
     if cfg["type"] == "phi":
-        scores = [1, 2, 3, 5, 10]
+        scores = [0, 1, 2, 3, 5, 10]
+        p0 = cfg.get("p0") or 0.0
+        probability = lambda j: p0 if j == 0 else j ** -cfg["phi"]
         table = html.Table(
             [html.Tr([html.Th("donor score")] + [html.Th(str(j)) for j in scores]),
-             html.Tr([html.Th("p(help)")] + [html.Td(f"{j ** -cfg['phi']:.3g}", style=shade(j ** -cfg["phi"]))
+             html.Tr([html.Th("p(help)")] + [html.Td(f"{probability(j):.3g}", style=shade(probability(j)))
                                              for j in scores])],
             className="grid pgrid")
-        return html.Div([table, html.Div("Only helps a receiver with a score, and never when its own score is 0.",
-                                         className="hint")])
+        return html.Div([table, html.Div("Only helps a receiver with a score.", className="hint")])
     labels = spec.class_labels(cfg["type"], cfg.get("tau"))
     header = html.Tr([html.Th("receiver ↓  donor →", className="corner")] + [html.Th(f"score {c}") for c in labels])
     rows = [html.Tr([html.Th(f"score {labels[r]}")]

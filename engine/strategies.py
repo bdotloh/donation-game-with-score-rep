@@ -12,7 +12,8 @@ for j = 0, ..., n_scores - 1. This covers
     BinaryStrategy   classes s = 0 / s >= 1, a 2x2 table of probabilities
     TernaryStrategy  classes s = 0 / 0 < s <= tau / s > tau, a 3x3 table
     PhiDisc          helps a receiver with positive score with probability
-                     j^(-phi) when the donor has score j >= 1, never otherwise
+                     j^(-phi) when the donor has score j >= 1, with probability
+                     p0 (default 0, never) when the donor has score 0
 
 Strategy names follow the barcode convention of helper_funcs.jl: rows are the
 receiver's class, columns the donor's class, '0' declines and 'g' gives, e.g.
@@ -106,27 +107,34 @@ class TernaryStrategy(ClassStrategy):
 
 
 class PhiDisc(Strategy):
-    """phi-Disc: don't help when score-less, else help a receiver with positive
-    score with probability j^(-phi), j being the donor's score (phi >= 0).
+    """phi-Disc: help a receiver with positive score with probability j^(-phi), j being the donor's score
+    (phi >= 0); a donor with score 0 helps such a receiver with probability p0 (default 0: never). A receiver
+    with score 0 is never helped.
 
     The notes study it under CN:00000-0+ NC:00000000: a Can with a positive score
     gains one by helping a Need with a positive score, and loses one by declining.
     """
 
-    def __init__(self, phi):
+    def __init__(self, phi, p0=0.0):
         if phi < 0:
             raise ValueError(f"phi must be >= 0; got {phi}.")
+        if not 0 <= p0 <= 1:
+            raise ValueError(f"p0 must lie in [0, 1]; got {p0}.")
         super().__init__(PossessionPartition())
         self.phi = float(phi)
+        self.p0 = float(p0)
 
     def _compute_donor_help(self, n_scores):
         help_ = np.zeros((2, n_scores))
         j = np.arange(1, n_scores)
         help_[1, 1:] = j.astype(float) ** (-self.phi)
+        help_[1, 0] = self.p0
         return help_
 
     @property
     def name(self):
+        if self.p0:
+            return f"phi-Disc(phi={self.phi:g},p0={self.p0:g})"
         return f"phi-Disc(phi={self.phi:g})"
 
 
@@ -152,12 +160,13 @@ def all_ternary_strategies(tau):
 
 def strategy_from_name(name, tau=None):
     """A strategy from its name: "a,b|c,d" (binary), "a,b,c|d,e,f|g,h,i" (ternary, needs tau; a trailing
-    " (tau=T)" is also understood) or "phi:0.5" / "phi-Disc(phi=0.5)" (phi-Disc)."""
+    " (tau=T)" is also understood) or "phi:0.5" / "phi-Disc(phi=0.5)" (phi-Disc; add ",p0=0.3" for the probability
+    of a donor with score 0)."""
     name = name.strip()
     if name.startswith("phi:"):
-        return PhiDisc(float(name[4:]))
+        return phi_from_text(name[4:])
     if name.startswith("phi-Disc(phi=") and name.endswith(")"):
-        return PhiDisc(float(name[len("phi-Disc(phi="):-1]))
+        return phi_from_text(name[len("phi-Disc(phi="):-1])
     if " (tau=" in name and name.endswith(")"):
         name, tau_text = name[:-1].split(" (tau=")
         tau = int(tau_text)
@@ -167,6 +176,16 @@ def strategy_from_name(name, tau=None):
             raise ValueError(f"The ternary strategy {name!r} needs tau.")
         return TernaryStrategy.from_name(name, tau)
     return BinaryStrategy.from_name(name)
+
+
+def phi_from_text(text):
+    """PhiDisc from "0.5" or "0.5,p0=0.3"."""
+    phi, *rest = text.split(",")
+    if not rest:
+        return PhiDisc(float(phi))
+    if len(rest) != 1 or not rest[0].startswith("p0="):
+        raise ValueError(f"Expected phi or phi,p0=P in {text!r}.")
+    return PhiDisc(float(phi), float(rest[0][3:]))
 
 
 def parse_table(name, n):

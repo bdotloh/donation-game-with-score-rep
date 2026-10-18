@@ -32,11 +32,15 @@ def layout():
                                                     debounce=False)),
                             html.Div(field("τ", dcc.Input(id="s-tau", type="text", value="2", inputMode="numeric", className="num")),
                                      id="s-tau-row", style={"display": "none"}),
-                            html.Div(
+                            html.Div([
                                 field("φ", dcc.Input(id="s-phi", type="text", value="1", inputMode="decimal", className="num"),
-                                      hint="Never helps when its own score is 0; otherwise helps a receiver with a "
-                                           "score with probability j^(−φ), j being its own score."),
-                                id="s-phi-row", style={"display": "none"}),
+                                      hint="Helps a receiver with a score with probability j^(−φ), j being its own "
+                                           "score (never a receiver with score 0)."),
+                                field("p(help) when its own score is 0",
+                                      dcc.Input(id="s-p0", type="text", value="0", inputMode="decimal", className="num"),
+                                      hint="The probability that a donor with score 0 helps a receiver with a score "
+                                           "(0 = never)."),
+                            ], id="s-phi-row", style={"display": "none"}),
                             html.Div(id="s-grid"),
                             html.Div(id="s-error", className="status error"),
                             html.Button("Add strategy", id="s-add", className="primary", n_clicks=0),
@@ -135,12 +139,13 @@ def register(app):
         Input({"type": "s-p", "r": ALL, "c": ALL}, "value"),
         Input("s-tau", "value"),
         Input("s-phi", "value"),
+        Input("s-p0", "value"),
         Input("s-name", "value"),
         Input("s-range", "value"),
     )
-    def preview(kind, values, tau, phi, name, max_score):
+    def preview(kind, values, tau, phi, p0, name, max_score):
         matrix = grid_values(ctx.inputs_list[1], 3 if kind == "ternary" else 2)
-        cfg, error = current_strategy(kind, matrix, tau, phi, name)
+        cfg, error = current_strategy(kind, matrix, tau, phi, name, p0)
         max_score, _ = validation.positive_int(max_score, "Scores shown")
         if error:
             return no_update, error, None
@@ -231,15 +236,18 @@ def register(app):
         return experiment["strategies"], params, "/parameters", ""
 
 
-def current_strategy(kind, matrix, tau, phi, name):
+def current_strategy(kind, matrix, tau, phi, name, p0="0"):
     """Strategy cfg from the editor (matrix: the p(help) grid as typed), or an error message."""
     name = (name or "").strip()
     if kind == "phi":
         phi_value, error = validation.non_negative(phi, "φ")
         if error:
             return None, error
-        return {"type": "phi", "name": name or f"φ-Disc (φ={phi_value:g})", "P": None, "tau": None,
-                "phi": phi_value}, ""
+        p0_value, error = validation.probability(p0 if p0 not in (None, "") else "0")
+        if error:
+            return None, f"p(help) at score 0: {error}"
+        label = f"φ-Disc (φ={phi_value:g})" if not p0_value else f"φ-Disc (φ={phi_value:g}, p0={p0_value:g})"
+        return {"type": "phi", "name": name or label, "P": None, "tau": None, "phi": phi_value, "p0": p0_value}, ""
     n = 3 if kind == "ternary" else 2
     tau_value = None
     if kind == "ternary":
