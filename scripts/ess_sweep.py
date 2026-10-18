@@ -168,7 +168,7 @@ class Sweep:
         roles = role_factor(a.q)
         solver = StableScoreSolver(norm, self.noise, tol=a.tol, max_iter=a.maxn, role_factor=roles)
         payoffs = Payoffs(benefit=a.benefit, cost=a.cost, role_factor=roles)
-        finder = ESSFinder(solver, payoffs, rho=a.rho, fitness_threshold=a.fitness_threshold,
+        finder = ESSFinder(solver, payoffs, rho=a.rho, fitness_threshold=a.fitness_threshold, tie_tol=a.tie_tol,
                            final_max_iter=a.final_maxn)
         rows = []
         for strategy in finder(self.candidates, self.invaders, self.w_init):
@@ -224,7 +224,7 @@ def slurm_task():
 
 def config_of(args):
     keys = ["norms", "tau", "strategies", "invaders", "eps", "eps_up", "eps_down", "rho", "maxn", "final_maxn", "tol",
-            "w_init", "benefit", "cost", "q", "fitness_threshold", "sample", "seed"]
+            "w_init", "benefit", "cost", "q", "fitness_threshold", "tie_tol", "sample", "seed"]
     return {k: getattr(args, k) for k in keys}
 
 
@@ -349,6 +349,8 @@ def build_parser():
     noise.add_argument("--cost", type=float, default=1.0)
     noise.add_argument("--q", type=float, default=0.5, help="probability of being able to help")
     noise.add_argument("--fitness-threshold", type=float, default=1e-5)
+    noise.add_argument("--tie-tol", type=float, default=0.0,
+                       help="payoffs closer than this count as equal (0: exact; 1e-12 treats rounding noise as a tie)")
     jobs = run_p.add_argument_group("splitting the work")
     jobs.add_argument("--sample", type=int, help="use a random sample of this many norms")
     jobs.add_argument("--seed", type=int, default=0, help="seed of the sample")
