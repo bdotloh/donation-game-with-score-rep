@@ -302,5 +302,6 @@ def params_from_experiment(experiment):
         "interactions": {"p_can": fmt(number(experiment.get("p_can", 0.5))), "benefit": fmt(number(experiment["benefit"])),
                          "cost": fmt(number(experiment["cost"]))},
         "advanced": {**{k: fmt(number(experiment[k])) for k in ("max_iter", "tol", "resolution")},
-                     "full_steps": bool(experiment.get("full_steps", False))},
+                     "full_steps": bool(experiment.get("full_steps", False)),
+                     "max_score": fmt(number(experiment["max_score"])) if experiment.get("max_score") else ""},
     }
