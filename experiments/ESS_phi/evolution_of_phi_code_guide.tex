@@ -1,0 +1,1156 @@
+\documentclass[11pt]{article}
+
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb,bm}
+\usepackage{booktabs}
+\usepackage{enumitem}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage{hyperref}
+
+\hypersetup{colorlinks=true,linkcolor=blue,urlcolor=blue}
+
+\lstset{
+  language=Python,
+  basicstyle=\ttfamily\small,
+  frame=single,
+  breaklines=true,
+  showstringspaces=false,
+  columns=fullflexible,
+  keepspaces=true,
+  commentstyle=\itshape,
+  keywordstyle=\bfseries
+}
+
+\title{How to Write Code to Ask: ``What Will Evolution Do to $\phi$?''}
+\author{}
+\date{}
+
+\begin{document}
+\maketitle
+
+\section{The question}
+
+The parameter $\phi$ is treated as a heritable strategy trait. The aim is not merely to compare two fixed values such as $\phi=0$ and $\phi=1$. The aim is to determine the \emph{direction of selection on $\phi$}: if the population currently has trait value $\phi$, will nearby mutants with slightly larger or slightly smaller $\phi$ invade?
+
+The computational pipeline is
+\[
+\boxed{
+\phi_r,\phi_m
+\;\longrightarrow\;
+\text{stationary score distributions}
+\;\longrightarrow\;
+\text{fitnesses}
+\;\longrightarrow\;
+\text{invasion fitness}
+\;\longrightarrow\;
+\text{selection gradient}
+}
+\]
+where $\phi_r$ is the resident trait and $\phi_m$ is the mutant trait.
+
+The central quantity is the invasion fitness
+\[
+\boxed{
+ s(\phi_m,\phi_r)
+ = f_m(\phi_m,\phi_r)-f_r(\phi_m,\phi_r).
+}
+\]
+A rare mutant can invade if $s(\phi_m,\phi_r)>0$.
+
+\section{Step 1: represent a resident and a rare mutant}
+
+For a resident trait $\phi_r$ and mutant trait $\phi_m$, give the mutant a small frequency $\delta$:
+\[
+\rho_r=1-\delta,
+\qquad
+\rho_m=\delta,
+\qquad
+0<\delta\ll 1.
+\]
+For example, one can begin with $\delta=10^{-3}$ and later verify that the result is stable when $\delta$ is made smaller.
+
+In code:
+
+\begin{lstlisting}
+def population_frequencies(delta=1e-3):
+    return np.array([1.0 - delta, delta])
+\end{lstlisting}
+
+The ordering throughout the code will be
+\[
+\text{index }0=\text{resident},
+\qquad
+\text{index }1=\text{mutant}.
+\]
+
+\section{Step 2: for fixed $(\phi_r,\phi_m)$, solve the score-distribution problem}
+
+The replicator or invasion calculation cannot be done before the score process is solved. For a fixed population composition and fixed trait values, the score distributions must first be at their stationary self-consistent values.
+
+Let
+\[
+\bm{\pi}_0
+=
+\left(
+\pi_0^{(r)},
+\pi_0^{(m)}
+\right),
+\]
+where $\pi_0^{(r)}$ and $\pi_0^{(m)}$ are the stationary probabilities of score zero for the resident and mutant respectively.
+
+In the two-strategy case discussed here,
+\[
+H(\bm{\pi}_0;\bm{\rho})
+=
+\frac14\left[
+\rho_r\left(1-\pi_0^{(r)}\right)
++
+\rho_m\left(1-\pi_0^{(m)}\right)
+\right],
+\]
+and
+\[
+A=(1-\varepsilon)H.
+\]
+
+In code:
+
+\begin{lstlisting}
+def H_from_pi0(pi0, rho):
+    return 0.25 * np.sum(rho * (1.0 - pi0))
+\end{lstlisting}
+
+\subsection{The finite birth--death chain}
+
+Use the finite score space
+\[
+\{0,1,\ldots,m\}.
+\]
+For a p-Disc trait $\phi$, the transition probabilities used in the current model are
+\[
+\alpha=\varepsilon\epsilon_{\rm up},
+\]
+for the upward move from score zero, and for positive score $k$,
+\[
+\beta_k
+=
+\frac{A}{k^\phi}
++
+\varepsilon\epsilon_{\rm up},
+\]
+\[
+\gamma_k
+=
+A\left(1-\frac{1}{k^\phi}\right)
++
+\varepsilon\epsilon_{\rm down}.
+\]
+The upper boundary $m$ is reflecting in the sense that there is no transition from $m$ to $m+1$.
+
+A transition-matrix constructor is therefore:
+
+\begin{lstlisting}
+def transition_matrix(phi, H, m, epsilon, epsilon_up, epsilon_down):
+    A = (1.0 - epsilon) * H
+    P = np.zeros((m + 1, m + 1))
+
+    # state 0
+    alpha = epsilon * epsilon_up
+    P[0, 1] = alpha
+    P[0, 0] = 1.0 - alpha
+
+    # states 1,...,m-1
+    for k in range(1, m):
+        help_term = 1.0 / (k ** phi)
+
+        beta = A * help_term + epsilon * epsilon_up
+        gamma = A * (1.0 - help_term) + epsilon * epsilon_down
+
+        P[k, k + 1] = beta
+        P[k, k - 1] = gamma
+        P[k, k] = 1.0 - beta - gamma
+
+    # upper boundary m
+    help_term = 1.0 / (m ** phi)
+    gamma = A * (1.0 - help_term) + epsilon * epsilon_down
+
+    P[m, m - 1] = gamma
+    P[m, m] = 1.0 - gamma
+
+    return P
+\end{lstlisting}
+
+Before using this numerically, check that every entry of $P$ lies in $[0,1]$. In particular, for interior states one needs
+\[
+\beta_k+\gamma_k\le 1.
+\]
+
+\section{Step 3: compute the stationary distribution of a fixed transition matrix}
+
+For a fixed matrix $P$, solve
+\[
+\bm{\pi}P=\bm{\pi},
+\qquad
+\sum_{k=0}^{m}\pi_k=1.
+\]
+A convenient numerical implementation replaces one row of $P^\top-I$ by the normalization equation:
+
+\begin{lstlisting}
+def stationary_distribution(P):
+    n = P.shape[0]
+
+    M = P.T - np.eye(n)
+    rhs = np.zeros(n)
+
+    M[-1, :] = 1.0
+    rhs[-1] = 1.0
+
+    pi = np.linalg.solve(M, rhs)
+    return pi
+\end{lstlisting}
+
+This avoids evaluating the closed-form Gamma-function expression and is usually more numerically robust for the finite chain.
+
+\section{Step 4: define the nonlinear fixed-point map}
+
+The score transition matrices depend on $H$, and $H$ depends on the unknown stationary zero-score probabilities. Hence the stationary problem is nonlinear.
+
+For a candidate
+\[
+\bm{x}=(x_r,x_m),
+\]
+interpret $x_r$ and $x_m$ as candidate values for $\pi_0^{(r)}$ and $\pi_0^{(m)}$. Compute $H(\bm{x})$, build the resident and mutant transition matrices, compute their stationary distributions, and return their actual zero-score masses.
+
+This defines
+\[
+F(\bm{x};\phi_r,\phi_m,\bm{\rho})
+=
+\begin{pmatrix}
+F_r(\bm{x})\\
+F_m(\bm{x})
+\end{pmatrix}.
+\]
+
+In code:
+
+\begin{lstlisting}
+def F(pi0, rho, phis, params):
+    m, epsilon, epsilon_up, epsilon_down = params
+
+    H = H_from_pi0(pi0, rho)
+    out = np.zeros(2)
+
+    for i, phi in enumerate(phis):
+        P = transition_matrix(
+            phi, H, m,
+            epsilon, epsilon_up, epsilon_down
+        )
+        pi = stationary_distribution(P)
+        out[i] = pi[0]
+
+    return out
+\end{lstlisting}
+
+The self-consistent stationary condition is
+\[
+\boxed{
+F(\bm{\pi}_0)-\bm{\pi}_0=\bm{0}.
+}
+\]
+
+\section{Step 5: solve the nonlinear stationary problem}
+
+Use a numerical root solver:
+
+\begin{lstlisting}
+from scipy.optimize import root
+
+
+def solve_stationary_scores(rho, phis, params, guess=None):
+    if guess is None:
+        guess = np.array([0.5, 0.5])
+
+    sol = root(
+        lambda x: F(x, rho, phis, params) - x,
+        guess
+    )
+
+    if not sol.success:
+        raise RuntimeError(sol.message)
+
+    pi0_star = sol.x
+
+    if np.any(pi0_star < -1e-8) or np.any(pi0_star > 1.0 + 1e-8):
+        raise RuntimeError("Fixed point outside [0,1]^2")
+
+    m, epsilon, epsilon_up, epsilon_down = params
+    H = H_from_pi0(pi0_star, rho)
+
+    full_pis = []
+    for phi in phis:
+        P = transition_matrix(
+            phi, H, m,
+            epsilon, epsilon_up, epsilon_down
+        )
+        full_pis.append(stationary_distribution(P))
+
+    residual = np.linalg.norm(F(pi0_star, rho, phis, params) - pi0_star)
+
+    return pi0_star, full_pis, residual
+\end{lstlisting}
+
+At this point the code returns
+\[
+\bm{\pi}^{(r),*}
+\quad\text{and}\quad
+\bm{\pi}^{(m),*}
+\]
+for the specified resident and mutant values of $\phi$.
+
+\paragraph{Important numerical check.}
+The nonlinear fixed point need not be unique merely because each fixed finite Markov chain has a unique stationary distribution. Therefore, for selected $(\phi_r,\phi_m)$ pairs, solve from several initial guesses in $[0,1]^2$ and check whether the same root is recovered.
+
+\section{Step 6: turn stationary score distributions into helping probabilities}
+
+This is the point at which the exact donation-game strategy must be encoded.
+
+Let
+\[
+h_{ij}
+=
+\Pr(\text{strategy }i\text{ helps strategy }j),
+\]
+where $i,j\in\{r,m\}$.
+
+The most general calculation is
+\[
+\boxed{
+ h_{ij}
+ =
+ \sum_{k=0}^{m}\sum_{\ell=0}^{m}
+ \pi_k^{(i),*}\pi_\ell^{(j),*}
+ a_i(k,\ell),
+}
+\]
+where $a_i(k,\ell)$ is the probability that a donor of strategy $i$, with score $k$, helps a receiver with score $\ell$.
+
+Do \emph{not} hard-code the payoff calculation until $a_i(k,\ell)$ exactly matches the intended p-Disc rule. A generic implementation is:
+
+\begin{lstlisting}
+def action_probability(phi, donor_score, receiver_score):
+    """
+    Replace this body by the exact p-Disc action rule.
+
+    Return the probability that a donor with trait phi and
+    donor_score helps a receiver with receiver_score.
+    """
+    raise NotImplementedError
+
+
+def helping_matrix(full_pis, phis, m):
+    h = np.zeros((2, 2))
+
+    for i in range(2):          # donor strategy
+        for j in range(2):      # receiver strategy
+            total = 0.0
+
+            for k in range(m + 1):
+                for ell in range(m + 1):
+                    total += (
+                        full_pis[i][k]
+                        * full_pis[j][ell]
+                        * action_probability(phis[i], k, ell)
+                    )
+
+            h[i, j] = total
+
+    return h
+\end{lstlisting}
+
+If the actual action rule only distinguishes zero from positive score, the double sum can later be simplified analytically. It is useful to write the general version first because it makes the model logic explicit and reduces the chance of coding the wrong interaction rule.
+
+\section{Step 7: compute resident and mutant fitness}
+
+For the donation game, ignoring any common positive role-frequency factor for the moment,
+\[
+f_i
+=
+b\sum_j\rho_jh_{ji}
+-c\sum_j\rho_jh_{ij}.
+\]
+If donor and receiver opportunities have explicit probabilities in the model, multiply the benefit and cost terms by those probabilities here.
+
+In code:
+
+\begin{lstlisting}
+def fitness(rho, h, b, c, p_receiver=1.0, p_donor=1.0):
+    f = np.zeros(2)
+
+    for i in range(2):
+        received = sum(rho[j] * h[j, i] for j in range(2))
+        given = sum(rho[j] * h[i, j] for j in range(2))
+
+        f[i] = (
+            p_receiver * b * received
+            - p_donor * c * given
+        )
+
+    return f
+\end{lstlisting}
+
+For rare-mutant analysis, call the two values
+\[
+f_r=f_0,
+\qquad
+f_m=f_1.
+\]
+
+\section{Step 8: define invasion fitness}
+
+The invasion fitness is
+\[
+\boxed{
+ s(\phi_m,\phi_r)=f_m-f_r.
+}
+\]
+
+Write one function that performs the entire inner calculation:
+
+\begin{lstlisting}
+def invasion_fitness(
+    phi_mutant,
+    phi_resident,
+    delta,
+    params,
+    b,
+    c,
+    p_receiver=1.0,
+    p_donor=1.0,
+    guess=None
+):
+    rho = np.array([1.0 - delta, delta])
+    phis = np.array([phi_resident, phi_mutant])
+
+    pi0_star, full_pis, residual = solve_stationary_scores(
+        rho, phis, params, guess=guess
+    )
+
+    m = params[0]
+    h = helping_matrix(full_pis, phis, m)
+
+    f = fitness(
+        rho, h, b, c,
+        p_receiver=p_receiver,
+        p_donor=p_donor
+    )
+
+    s = f[1] - f[0]
+
+    return s, pi0_star, full_pis, residual
+\end{lstlisting}
+
+Interpretation:
+\[
+\begin{cases}
+s(\phi_m,\phi_r)>0, & \text{mutant invades},\\
+s(\phi_m,\phi_r)<0, & \text{mutant does not invade}.
+\end{cases}
+\]
+
+\section{Step 9: first make a pairwise invasibility plot}
+
+Before reducing the result to one number, inspect the full two-dimensional invasion relation. Choose grids of resident and mutant traits and evaluate
+\[
+s(\phi_m,\phi_r)
+\]
+at every grid point.
+
+\begin{lstlisting}
+def pairwise_invasibility_grid(
+    phi_values,
+    delta,
+    params,
+    b,
+    c,
+    p_receiver=1.0,
+    p_donor=1.0
+):
+    S = np.zeros((len(phi_values), len(phi_values)))
+
+    for r, phi_resident in enumerate(phi_values):
+        for q, phi_mutant in enumerate(phi_values):
+            s, _, _, _ = invasion_fitness(
+                phi_mutant,
+                phi_resident,
+                delta,
+                params,
+                b,
+                c,
+                p_receiver,
+                p_donor
+            )
+            S[q, r] = s
+
+    return S
+\end{lstlisting}
+
+Plot positive and negative regions:
+
+\begin{lstlisting}
+import matplotlib.pyplot as plt
+
+phi_values = np.linspace(0.0, 2.0, 101)
+S = pairwise_invasibility_grid(
+    phi_values,
+    delta,
+    params,
+    b,
+    c,
+    p_receiver,
+    p_donor
+)
+
+plt.figure(figsize=(7, 6))
+plt.contourf(phi_values, phi_values, S, levels=30)
+plt.contour(phi_values, phi_values, S, levels=[0.0], linewidths=2)
+plt.xlabel(r"resident $\phi_r$")
+plt.ylabel(r"mutant $\phi_m$")
+plt.title("Pairwise invasibility plot")
+plt.colorbar(label=r"$s(\phi_m,\phi_r)$")
+plt.tight_layout()
+plt.show()
+\end{lstlisting}
+
+The diagonal $\phi_m=\phi_r$ should have invasion fitness approximately zero. This is also a useful diagnostic for the implementation.
+
+\section{Step 10: compute the selection gradient}
+
+The local evolutionary direction is determined by
+\[
+\boxed{
+D(\phi)
+=
+\left.
+\frac{\partial s(\phi_m,\phi_r)}{\partial\phi_m}
+\right|_{\phi_m=\phi_r=\phi}.
+}
+\]
+
+Numerically use a central finite difference:
+\[
+\boxed{
+D(\phi)
+\approx
+\frac{
+ s(\phi+h,\phi)
+ -
+ s(\phi-h,\phi)
+}{2h}.
+}
+\]
+
+In code:
+
+\begin{lstlisting}
+def selection_gradient(
+    phi,
+    h,
+    delta,
+    params,
+    b,
+    c,
+    p_receiver=1.0,
+    p_donor=1.0
+):
+    s_plus, _, _, _ = invasion_fitness(
+        phi + h,
+        phi,
+        delta,
+        params,
+        b,
+        c,
+        p_receiver,
+        p_donor
+    )
+
+    s_minus, _, _, _ = invasion_fitness(
+        phi - h,
+        phi,
+        delta,
+        params,
+        b,
+        c,
+        p_receiver,
+        p_donor
+    )
+
+    return (s_plus - s_minus) / (2.0 * h)
+\end{lstlisting}
+
+At the lower boundary $\phi=0$, a central difference would evaluate a negative trait value. If the admissible trait space is $\phi\ge 0$, use a one-sided difference at the boundary:
+
+\[
+D(0)
+\approx
+\frac{s(h,0)-s(0,0)}{h}.
+\]
+
+\section{Step 11: make the evolutionary phase portrait for $\phi$}
+
+Evaluate $D(\phi)$ on a grid:
+
+\begin{lstlisting}
+phi_grid = np.linspace(0.0, 2.0, 101)
+h = 1e-3
+
+grad = np.empty_like(phi_grid)
+
+for i, phi in enumerate(phi_grid):
+    if phi == 0.0:
+        s0, _, _, _ = invasion_fitness(
+            phi,
+            phi,
+            delta,
+            params,
+            b,
+            c,
+            p_receiver,
+            p_donor
+        )
+        s1, _, _, _ = invasion_fitness(
+            phi + h,
+            phi,
+            delta,
+            params,
+            b,
+            c,
+            p_receiver,
+            p_donor
+        )
+        grad[i] = (s1 - s0) / h
+    else:
+        grad[i] = selection_gradient(
+            phi,
+            h,
+            delta,
+            params,
+            b,
+            c,
+            p_receiver,
+            p_donor
+        )
+
+plt.figure(figsize=(8, 5))
+plt.plot(phi_grid, grad)
+plt.axhline(0.0, linewidth=1)
+plt.xlabel(r"$\phi$")
+plt.ylabel(r"selection gradient $D(\phi)$")
+plt.title(r"Evolutionary direction of $\phi$")
+plt.tight_layout()
+plt.show()
+\end{lstlisting}
+
+Interpret the sign as
+\[
+\boxed{
+D(\phi)>0 \Rightarrow \phi \text{ is pushed upward},
+}
+\]
+\[
+\boxed{
+D(\phi)<0 \Rightarrow \phi \text{ is pushed downward}.
+}
+\]
+A zero
+\[
+D(\phi^*)=0
+\]
+is a candidate evolutionary singular point.
+
+\section{Step 12: locate singular values numerically}
+
+Search for sign changes in $D(\phi)$ and refine each root with a one-dimensional root solver:
+
+\begin{lstlisting}
+from scipy.optimize import brentq
+
+
+def find_singular_points(phi_grid, gradient_function):
+    roots = []
+
+    values = np.array([gradient_function(phi) for phi in phi_grid])
+
+    for i in range(len(phi_grid) - 1):
+        left = phi_grid[i]
+        right = phi_grid[i + 1]
+
+        if values[i] == 0.0:
+            roots.append(left)
+
+        elif values[i] * values[i + 1] < 0.0:
+            root_phi = brentq(gradient_function, left, right)
+            roots.append(root_phi)
+
+    return roots
+\end{lstlisting}
+
+\section{Step 13: determine whether evolution moves toward or away from $\phi^*$}
+
+A singular point is locally convergence-stable if the arrows point toward it. Numerically, for small $\eta>0$, check
+\[
+D(\phi^*-\eta)>0,
+\qquad
+D(\phi^*+\eta)<0.
+\]
+Then nearby residents evolve toward $\phi^*$.
+
+Conversely,
+\[
+D(\phi^*-\eta)<0,
+\qquad
+D(\phi^*+\eta)>0
+\]
+means evolution moves away from $\phi^*$.
+
+Code:
+
+\begin{lstlisting}
+def convergence_stability(phi_star, gradient_function, eta=1e-3):
+    left = gradient_function(phi_star - eta)
+    right = gradient_function(phi_star + eta)
+
+    if left > 0.0 and right < 0.0:
+        return "convergence stable"
+    elif left < 0.0 and right > 0.0:
+        return "convergence unstable"
+    else:
+        return "inconclusive / higher-order case"
+\end{lstlisting}
+
+\section{Step 14: distinguish convergence stability from evolutionary stability}
+
+A trait value can attract the evolutionary trajectory and yet still be invasible by nearby mutants. Therefore, after finding $\phi^*$, inspect
+\[
+s(\phi_m,\phi^*)
+\]
+for mutants near $\phi^*$.
+
+For evolutionary stability one wants
+\[
+\boxed{
+ s(\phi_m,\phi^*)<0
+ \quad\text{for nearby }\phi_m\neq\phi^*.
+}
+\]
+
+A direct numerical check is:
+
+\begin{lstlisting}
+def local_invasion_test(
+    phi_star,
+    offsets,
+    delta,
+    params,
+    b,
+    c,
+    p_receiver=1.0,
+    p_donor=1.0
+):
+    results = []
+
+    for dphi in offsets:
+        if dphi == 0.0:
+            continue
+
+        phi_mutant = phi_star + dphi
+
+        if phi_mutant < 0.0:
+            continue
+
+        s, _, _, _ = invasion_fitness(
+            phi_mutant,
+            phi_star,
+            delta,
+            params,
+            b,
+            c,
+            p_receiver,
+            p_donor
+        )
+
+        results.append((phi_mutant, s))
+
+    return results
+\end{lstlisting}
+
+If all nearby mutant invasion fitnesses are negative, the singular resident resists nearby invasion. If mutants on one or both sides can invade, more complicated adaptive-dynamics behaviour, including possible evolutionary branching, should be investigated.
+
+\section{Step 15: optional canonical evolutionary ODE}
+
+If only the direction and fixed points of trait evolution matter, one may draw the phase line using
+\[
+\boxed{
+\dot\phi=D(\phi).
+}
+\]
+More generally, adaptive dynamics gives a positive scaling factor multiplying the selection gradient,
+\[
+\dot\phi=K(\phi)D(\phi),
+\qquad K(\phi)>0.
+\]
+The positive factor changes evolutionary speed but not the local direction of evolution or the locations of zeros of $D$.
+
+Thus the central numerical answer to ``what will evolution do to $\phi$?'' is the sign structure of $D(\phi)$.
+
+\section{Step 16: numerical robustness checks}
+
+The following checks should be part of the final analysis.
+
+\begin{enumerate}[label=\arabic*.]
+\item \textbf{Rare-mutant limit.} Repeat with, for example,
+\[
+\delta=10^{-2},10^{-3},10^{-4}.
+\]
+The invasion fitness and selection gradient should approach stable values as $\delta\to0$.
+
+\item \textbf{Finite-difference step.} Repeat with several $h$, for example
+\[
+h=10^{-2},10^{-3},10^{-4}.
+\]
+The estimated selection gradient should not be an artefact of one arbitrary $h$.
+
+\item \textbf{Score cutoff.} Repeat with larger $m$ to determine whether the evolutionary conclusion depends strongly on the finite upper score boundary.
+
+\item \textbf{Inner fixed-point residual.} Require
+\[
+\|F(\bm{\pi}_0^*)-\bm{\pi}_0^*\|
+\]
+to be small at every resident--mutant calculation.
+
+\item \textbf{Multiple inner roots.} At selected parameter values, solve the inner fixed-point problem from several starting guesses. If several valid roots occur, invasion fitness is not single-valued until a rule is specified for which stationary branch is dynamically realized.
+
+\item \textbf{Transition-matrix validity.} Verify that every row of every $P$ sums to one and that all entries lie in $[0,1]$.
+
+\item \textbf{Diagonal test.} Numerically check
+\[
+s(\phi,\phi)\approx0.
+\]
+A substantial nonzero value usually signals an implementation inconsistency.
+\end{enumerate}
+
+\section{Step 17: recommended program structure}
+
+A clean implementation should keep the model in small functions:
+
+\begin{lstlisting}
+# score process
+H_from_pi0(...)
+transition_matrix(...)
+stationary_distribution(...)
+F(...)
+solve_stationary_scores(...)
+
+# game interaction
+ action_probability(...)
+ helping_matrix(...)
+ fitness(...)
+
+# evolutionary analysis
+ invasion_fitness(...)
+ selection_gradient(...)
+ pairwise_invasibility_grid(...)
+ find_singular_points(...)
+ convergence_stability(...)
+ local_invasion_test(...)
+\end{lstlisting}
+
+The dependency structure is
+\[
+\boxed{
+\begin{aligned}
+(\phi_r,\phi_m,\delta)
+&\longrightarrow \bm{\rho},\\
+(\bm{\rho},\phi_r,\phi_m)
+&\longrightarrow \bm{\pi}^{(r),*},\bm{\pi}^{(m),*},\\
+(\bm{\pi}^{(r),*},\bm{\pi}^{(m),*})
+&\longrightarrow h_{ij},\\
+h_{ij}
+&\longrightarrow f_r,f_m,\\
+(f_r,f_m)
+&\longrightarrow s(\phi_m,\phi_r),\\
+s
+&\longrightarrow D(\phi),\\
+D
+&\longrightarrow \text{evolutionary direction of }\phi.
+\end{aligned}
+}
+\]
+
+\section{Step 18: the minimal final experiment}
+
+Once the action rule is correctly implemented, a minimal experiment answering the question is:
+
+\begin{enumerate}[label=\arabic*.]
+\item Choose an admissible interval, for example $\phi\in[0,2]$.
+\item Compute the pairwise invasibility plot $s(\phi_m,\phi_r)$.
+\item Compute $D(\phi)$ across the same interval.
+\item Find every zero $\phi^*$ of $D$.
+\item Determine whether each zero attracts or repels nearby resident traits.
+\item Test whether nearby mutants can invade each attracting singular point.
+\item Repeat the calculation for smaller $\delta$, several finite-difference steps $h$, and larger score cutoffs $m$.
+\end{enumerate}
+
+The resulting statement should then have the form
+\[
+\boxed{
+\text{selection pushes }\phi\text{ upward/downward on specified intervals and toward/away from specified }\phi^*.
+}
+\]
+That is a direct numerical answer to the question ``what will evolution do to $\phi$?''
+
+\section{One complete driver skeleton}
+
+The final driver script can be organized as follows. The only deliberately unfinished part below is \texttt{action\_probability}; it must encode the exact p-Disc action rule before the evolutionary output is interpreted.
+
+\begin{lstlisting}
+import numpy as np
+import matplotlib.pyplot as plt
+from scipy.optimize import root, brentq
+
+# ------------------------------------------------------------
+# 1. parameters
+# ------------------------------------------------------------
+
+m = 10
+epsilon = 0.1
+epsilon_up = 0.4
+epsilon_down = 0.6
+b = 2.0
+c = 1.0
+p_receiver = 1.0
+p_donor = 1.0
+
+params = (m, epsilon, epsilon_up, epsilon_down)
+delta = 1e-3
+h_fd = 1e-3
+
+# ------------------------------------------------------------
+# 2. score process
+# ------------------------------------------------------------
+
+def H_from_pi0(pi0, rho):
+    return 0.25 * np.sum(rho * (1.0 - pi0))
+
+
+def transition_matrix(phi, H, m, epsilon, epsilon_up, epsilon_down):
+    A = (1.0 - epsilon) * H
+    P = np.zeros((m + 1, m + 1))
+
+    alpha = epsilon * epsilon_up
+    P[0, 1] = alpha
+    P[0, 0] = 1.0 - alpha
+
+    for k in range(1, m):
+        help_term = 1.0 / (k ** phi)
+        beta = A * help_term + epsilon * epsilon_up
+        gamma = A * (1.0 - help_term) + epsilon * epsilon_down
+
+        P[k, k + 1] = beta
+        P[k, k - 1] = gamma
+        P[k, k] = 1.0 - beta - gamma
+
+    help_term = 1.0 / (m ** phi)
+    gamma = A * (1.0 - help_term) + epsilon * epsilon_down
+
+    P[m, m - 1] = gamma
+    P[m, m] = 1.0 - gamma
+
+    return P
+
+
+def stationary_distribution(P):
+    n = P.shape[0]
+    M = P.T - np.eye(n)
+    rhs = np.zeros(n)
+    M[-1, :] = 1.0
+    rhs[-1] = 1.0
+    return np.linalg.solve(M, rhs)
+
+
+def F(pi0, rho, phis, params):
+    m, epsilon, epsilon_up, epsilon_down = params
+    H = H_from_pi0(pi0, rho)
+
+    out = np.zeros(2)
+    for i, phi in enumerate(phis):
+        P = transition_matrix(
+            phi, H, m,
+            epsilon, epsilon_up, epsilon_down
+        )
+        out[i] = stationary_distribution(P)[0]
+
+    return out
+
+
+def solve_stationary_scores(rho, phis, params, guess=None):
+    if guess is None:
+        guess = np.array([0.5, 0.5])
+
+    sol = root(lambda x: F(x, rho, phis, params) - x, guess)
+
+    if not sol.success:
+        raise RuntimeError(sol.message)
+
+    pi0_star = sol.x
+
+    m, epsilon, epsilon_up, epsilon_down = params
+    H = H_from_pi0(pi0_star, rho)
+
+    full_pis = []
+    for phi in phis:
+        P = transition_matrix(
+            phi, H, m,
+            epsilon, epsilon_up, epsilon_down
+        )
+        full_pis.append(stationary_distribution(P))
+
+    residual = np.linalg.norm(F(pi0_star, rho, phis, params) - pi0_star)
+    return pi0_star, full_pis, residual
+
+# ------------------------------------------------------------
+# 3. game interaction -- INSERT EXACT RULE HERE
+# ------------------------------------------------------------
+
+def action_probability(phi, donor_score, receiver_score):
+    raise NotImplementedError("Insert exact p-Disc helping rule")
+
+
+def helping_matrix(full_pis, phis, m):
+    h = np.zeros((2, 2))
+
+    for i in range(2):
+        for j in range(2):
+            for k in range(m + 1):
+                for ell in range(m + 1):
+                    h[i, j] += (
+                        full_pis[i][k]
+                        * full_pis[j][ell]
+                        * action_probability(phis[i], k, ell)
+                    )
+
+    return h
+
+
+def fitness(rho, h, b, c, p_receiver=1.0, p_donor=1.0):
+    f = np.zeros(2)
+
+    for i in range(2):
+        received = sum(rho[j] * h[j, i] for j in range(2))
+        given = sum(rho[j] * h[i, j] for j in range(2))
+
+        f[i] = p_receiver * b * received - p_donor * c * given
+
+    return f
+
+# ------------------------------------------------------------
+# 4. invasion fitness
+# ------------------------------------------------------------
+
+def invasion_fitness(phi_m, phi_r):
+    rho = np.array([1.0 - delta, delta])
+    phis = np.array([phi_r, phi_m])
+
+    _, full_pis, _ = solve_stationary_scores(rho, phis, params)
+    hmat = helping_matrix(full_pis, phis, m)
+    f = fitness(rho, hmat, b, c, p_receiver, p_donor)
+
+    return f[1] - f[0]
+
+# ------------------------------------------------------------
+# 5. selection gradient
+# ------------------------------------------------------------
+
+def selection_gradient(phi):
+    if phi <= h_fd:
+        return (
+            invasion_fitness(phi + h_fd, phi)
+            - invasion_fitness(phi, phi)
+        ) / h_fd
+
+    return (
+        invasion_fitness(phi + h_fd, phi)
+        - invasion_fitness(phi - h_fd, phi)
+    ) / (2.0 * h_fd)
+
+# ------------------------------------------------------------
+# 6. pairwise invasibility plot
+# ------------------------------------------------------------
+
+phi_grid = np.linspace(0.0, 2.0, 101)
+S = np.zeros((len(phi_grid), len(phi_grid)))
+
+for r, phi_r in enumerate(phi_grid):
+    for q, phi_m in enumerate(phi_grid):
+        S[q, r] = invasion_fitness(phi_m, phi_r)
+
+plt.figure(figsize=(7, 6))
+plt.contourf(phi_grid, phi_grid, S, levels=30)
+plt.contour(phi_grid, phi_grid, S, levels=[0.0], linewidths=2)
+plt.xlabel(r"resident $\phi_r$")
+plt.ylabel(r"mutant $\phi_m$")
+plt.colorbar(label=r"$s(\phi_m,\phi_r)$")
+plt.tight_layout()
+plt.show()
+
+# ------------------------------------------------------------
+# 7. evolutionary phase portrait for phi
+# ------------------------------------------------------------
+
+grad = np.array([selection_gradient(phi) for phi in phi_grid])
+
+plt.figure(figsize=(8, 5))
+plt.plot(phi_grid, grad)
+plt.axhline(0.0, linewidth=1)
+plt.xlabel(r"$\phi$")
+plt.ylabel(r"$D(\phi)$")
+plt.title(r"Selection gradient for $\phi$")
+plt.tight_layout()
+plt.show()
+
+# ------------------------------------------------------------
+# 8. locate singular points
+# ------------------------------------------------------------
+
+singular_points = []
+
+for i in range(len(phi_grid) - 1):
+    if grad[i] * grad[i + 1] < 0.0:
+        phi_star = brentq(
+            selection_gradient,
+            phi_grid[i],
+            phi_grid[i + 1]
+        )
+        singular_points.append(phi_star)
+
+print("singular points:", singular_points)
+\end{lstlisting}
+
+\section{Summary}
+
+The code should not evolve $\phi$ by directly inserting it into the ordinary two-strategy replicator equation and reading off a winner between two arbitrarily chosen values. Instead, it should ask which nearby mutant traits can invade each resident trait. For every resident--mutant pair, the stationary score fixed point must be solved first. Those stationary distributions determine helping probabilities and fitnesses, which determine invasion fitness. Differentiating invasion fitness with respect to the mutant trait yields the selection gradient. The sign of that gradient gives the local evolutionary direction of $\phi$.
+
+The final object of interest is therefore
+\[
+\boxed{
+D(\phi)
+=
+\left.
+\frac{\partial}{\partial\phi_m}
+\left[f_m(\phi_m,\phi_r)-f_r(\phi_m,\phi_r)\right]
+\right|_{\phi_m=\phi_r=\phi}.
+}
+\]
+Plotting $D(\phi)$, locating its zeros, and testing their convergence and invasion stability answers the question: \emph{what will evolution do to $\phi$?}
+
+\end{document}

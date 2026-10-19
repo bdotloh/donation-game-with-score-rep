@@ -17,3 +17,6 @@ docs/engine/*.aux
 docs/engine/*.log
 docs/engine/*.out
 docs/engine/*.toc
+
+# results of the ESS experiments (experiments/ess_grid.py)
+experiments/*/results_*/
