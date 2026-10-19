@@ -5,7 +5,7 @@ strategy: {"type": "binary" | "ternary" | "phi", "name": str, "P": [[p, ...], ..
 norm:     {"type": "binary" | "ternary", "tau": int, "CN": "8 or 18 of -0+", "NC": "..."}
 experiment: {"version": 1, "strategies": [...], "scores": [{"score", "mass"}, ...],
              "norm": {...}, "noise": {"eps", "eps_up", "eps_down"}, "p_can", "benefit", "cost",
-             "max_iter", "tol", "resolution", "full_steps"}
+             "max_iter", "tol", "resolution", "full_steps", "max_score" (optional: no scores above it)}
 (older files also hold "shares", "dt" and "n_steps"; the starting point, step size and number of steps of an
 evolution are now chosen on the results page, and "dt" and "n_steps" here only set its defaults.)
 full_steps: run every score chain for max_iter steps instead of stopping at the tolerance.
@@ -134,7 +134,8 @@ def build(experiment):
     noise = Noise(**experiment["noise"])
     roles = role_factor(experiment.get("p_can", 0.5))
     solver = StableScoreSolver(norm, noise, tol=experiment["tol"], max_iter=experiment["max_iter"], role_factor=roles,
-                               force_max_iter=bool(experiment.get("full_steps", False)), tail_tol=TAIL_TOL)
+                               force_max_iter=bool(experiment.get("full_steps", False)), tail_tol=TAIL_TOL,
+                               max_score=experiment.get("max_score"))
     payoffs = Payoffs(benefit=experiment["benefit"], cost=experiment["cost"], role_factor=roles)
     dynamics = ReplicatorDynamics(solver, payoffs, dt=experiment.get("dt", DEFAULT_ADVANCED["dt"]))
     return {
@@ -190,8 +191,8 @@ def check(experiment):
             dt = validation.parse_number(experiment["dt"])
             if dt is None or dt <= 0:
                 return "The step size must be positive."
-        for key in ("n_steps", "max_iter", "resolution"):
-            if key not in experiment and key == "n_steps":
+        for key in ("n_steps", "max_iter", "resolution", "max_score"):
+            if key not in experiment and key in ("n_steps", "max_score"):
                 continue
             if validation.positive_int(experiment[key], key)[1]:
                 return f"{key} must be a whole number, 1 or more."

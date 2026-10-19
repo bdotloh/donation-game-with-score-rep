@@ -325,3 +325,13 @@ def test_phi_disc_help_at_score_zero_adds_exactly_that_help():
         positive = 1 - w0[k, 0]
         np.testing.assert_allclose(H1[0, k] - H0[0, k], 0.5 * w0[0, 0] * positive, rtol=1e-6)
     np.testing.assert_array_equal(H1[1], 0)                                    # Defectors still never help
+
+
+def test_max_score_caps_the_scores():
+    solver = StableScoreSolver(ScoringNorm.from_barcode("CN:++++++++ NC:00000000"), Noise(), max_iter=300, force_max_iter=True)
+    population = Population([PhiDisc(0.0)])
+    free = solver(population, [0.0, 1.0])
+    capped = solver.with_options(max_score=4)(population, [0.0, 1.0])
+    assert free.w.shape[1] > 5 and capped.w.shape[1] == 5
+    np.testing.assert_allclose(capped.w.sum(), 1.0)
+    assert not capped.drifting.any()

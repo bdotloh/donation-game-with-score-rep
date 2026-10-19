@@ -112,9 +112,10 @@ python -m gui            # then open http://127.0.0.1:8050
    2 or 3. They are labelled S1, S2, S3 in that order.
 2. **Parameters**: the initial score distribution, scoring norm (binary or ternary, one
    dropdown per case, a preset, or paste a barcode), noise ε, ε↑, ε↓ (ε↑ + ε↓ = 1),
-   the probability q of being able to help, benefit and cost. The solver settings are not on the page:
-   2000 score iterations, all of them run, tolerance 1e-6 and an arrow grid of 20 points per side (a
-   settings file keeps its own). Defaults: ε = 0.1, ε↑ = ε↓ = 0.5. With ε↑ = ε↓ many populations have no
+   the probability q of being able to help, benefit and cost, the max
+   score iterations (default 2000, all of them run) and an optional max score (empty: no cap; otherwise no
+   score above it exists). The tolerance (1e-6) and the arrow grid (20 points per side) are not on the page
+   (a settings file keeps its own). Defaults: ε = 0.1, ε↑ = ε↓ = 0.5. With ε↑ = ε↓ many populations have no
    stable score distribution, so values are those after the 2000 iterations. Settings can be saved and
    loaded as JSON.
 3. **Results**, in three rows. Row 1 (it can be folded away): the strategies as S1, S2, S3 in the colours of

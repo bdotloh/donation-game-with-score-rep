@@ -25,6 +25,8 @@ FORM = [
     ("p-benefit", "value"),
     ("p-cost", "value"),
     ("p-advanced", "data"),
+    ("p-max-iter", "value"),
+    ("p-max-score", "value"),
 ]
 
 
@@ -107,8 +109,14 @@ def form(strategies, params):
                             field("Cost c", text_input("p-cost", inter["cost"])),
                         ], className="row"),
                         html.Div(id="p-inter-status"),
-                        # The solver settings (score iterations, tolerance, arrow grid, whether every chain runs
-                        # all its iterations) are not on the page; they are the defaults, or those of a loaded file.
+                        html.Div([
+                            field("Max iterations", text_input("p-max-iter", adv["max_iter"], mode="numeric"),
+                                  hint="Steps of the score chain."),
+                            field("Max score (optional)", text_input("p-max-score", adv.get("max_score", ""), mode="numeric"),
+                                  hint="Leave empty for no cap."),
+                        ], className="row"),
+                        # The other solver settings (tolerance, arrow grid, whether every chain runs all its
+                        # iterations) are not on the page; they are the defaults, or those of a loaded file.
                         dcc.Store(id="p-advanced", data=adv),
                     ]),
                 ]),
@@ -194,7 +202,7 @@ def register(app):
         *[Input(i, p) for i, p in FORM],
         prevent_initial_call=True,
     )
-    def remember(scores, norm_type, tau, cn, nc, eps, eps_up, eps_down, q, b, c, advanced):
+    def remember(scores, norm_type, tau, cn, nc, eps, eps_up, eps_down, q, b, c, advanced, max_iter, max_score):
         if not cn:
             return no_update
         bits = "".join(cn or [])
@@ -204,7 +212,7 @@ def register(app):
                      "CN": bits, "NC": "".join(nc or [])},
             "noise": {"eps": eps, "eps_up": eps_up, "eps_down": eps_down},
             "interactions": {"p_can": q, "benefit": b, "cost": c},
-            "advanced": advanced,
+            "advanced": {**(advanced or {}), "max_iter": max_iter, "max_score": max_score},
         }
 
     @app.callback(Output("p-noise-status", "children"),
@@ -403,7 +411,7 @@ def interactions(q, b, c):
 
 
 def experiment_from_inputs(strategies, scores, norm_type, tau, cn, nc, eps, eps_up, eps_down, q, b, c,
-                           advanced=None):
+                           advanced=None, max_iter=None, max_score=None):
     """A validated experiment dict, or the first error message."""
     if not strategies or not 2 <= len(strategies) <= spec.MAX_STRATEGIES:
         return None, "Choose 2 or 3 strategies first."
@@ -428,6 +436,8 @@ def experiment_from_inputs(strategies, scores, norm_type, tau, cn, nc, eps, eps_
     except ValueError as error:
         return None, f"Norm: {error}"
     advanced = {**advanced_defaults(), **(advanced or {})}
+    if max_iter not in (None, ""):
+        advanced["max_iter"] = max_iter
     tol_value, error = validation.non_negative(advanced["tol"], "The tolerance")
     if error:
         return None, error
@@ -436,6 +446,13 @@ def experiment_from_inputs(strategies, scores, norm_type, tau, cn, nc, eps, eps_
         numbers[key], error = validation.positive_int(advanced[key], what)
         if error:
             return None, error
+    cap = {}
+    if max_score not in (None, ""):
+        cap["max_score"], error = validation.positive_int(max_score, "Max score")
+        if error:
+            return None, error
+        if max(int(e["score"]) for e in scores) > cap["max_score"]:
+            return None, "Max score is below a score in the initial distribution."
     total = sum(float(e["mass"]) for e in scores)
     experiment = {
         "version": spec.VERSION,
@@ -446,6 +463,7 @@ def experiment_from_inputs(strategies, scores, norm_type, tau, cn, nc, eps, eps_
         **inter,
         "tol": tol_value,
         **numbers,
+        **cap,
         "full_steps": bool(advanced["full_steps"]),
     }
     return experiment, ""

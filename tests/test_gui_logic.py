@@ -90,6 +90,20 @@ def test_experiment_errors():
     assert "2 or 3" in experiment_from_inputs(strategies[:1], *args)[1]
 
 
+def test_max_iter_and_max_score_inputs():
+    strategies = [spec.preset_strategy("AllD-Disc"), spec.preset_strategy("Defectors")]
+    args = [[{"score": 0, "mass": 1.0}, {"score": 3, "mass": 1.0}], "binary", None, list("00000-00"), list("00000000"),
+            "0.1", "0.4", "0.6", "0.5", "2", "1", {"max_iter": "200"}]
+    experiment, error = experiment_from_inputs(strategies, *args, "50", "")
+    assert error == "" and experiment["max_iter"] == 50 and "max_score" not in experiment
+    experiment, error = experiment_from_inputs(strategies, *args, "50", "5")
+    assert error == "" and experiment["max_score"] == 5 and spec.check(experiment) == ""
+    assert spec.build(experiment)["dynamics"].solver.max_score == 5
+    assert "Max score" in experiment_from_inputs(strategies, *args, "50", "2")[1]      # below an initial score
+    assert "Max score" in experiment_from_inputs(strategies, *args, "50", "x")[1]
+    assert "Max score iterations" in experiment_from_inputs(strategies, *args, "0", "")[1]
+
+
 @pytest.mark.parametrize("strategy", [BinaryStrategy.from_name("0,0|0,g"), TernaryStrategy.from_name(
     "0,0,0|0,g,0.5|0,g,g", tau=2), PhiDisc(1)])
 def test_strategy_surface(strategy):

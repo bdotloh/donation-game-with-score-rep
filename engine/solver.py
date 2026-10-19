@@ -46,8 +46,10 @@ class StableScoreSolver:
         record_history=False,
         role_factor=ROLE_FACTOR,
         tail_tol=0.0,
+        max_score=None,
     ):
-        """tail_tol > 0 drops the top scores whose mass is below tail_tol in every chain after each
+        """max_score: if given, scores above it do not exist (a donor at max_score who would gain a score stays).
+        tail_tol > 0 drops the top scores whose mass is below tail_tol in every chain after each
         step (and renormalises), so long runs don't carry thousands of near-empty scores."""
         self.norm = norm
         self.noise = noise or Noise()
@@ -58,6 +60,7 @@ class StableScoreSolver:
         self.force_max_iter = force_max_iter
         self.record_history = record_history
         self.tail_tol = tail_tol
+        self.max_score = max_score
 
     def with_options(self, **options):
         """Copy of this solver with some settings (tol, max_iter, ...) changed."""
@@ -82,6 +85,9 @@ class StableScoreSolver:
             dw = chain.change(w_prev, rates.g, rates.f)
             w = w_prev + dw
             w = w / w.sum(axis=1, keepdims=True)
+            if self.max_score is not None and w.shape[1] > self.max_score + 1:
+                w = w[:, :self.max_score + 1]
+                w = w / w.sum(axis=1, keepdims=True)
             if self.tail_tol > 0:
                 w = _trim(w, self.tail_tol, n_init)
             if self.record_history:
@@ -96,7 +102,7 @@ class StableScoreSolver:
             # up-rate at the top is at least the down-rate there is no stable distribution: the
             # change per step only shrinks slowly, and a small change does not mean convergence.
             up, down = rates.g[:, -1], rates.f[:, -1]
-            drifting = (up > 0) & (up >= down * (1 - 1e-9))   # equal up to round-off counts as drifting
+            drifting = (up > 0) & (up >= down * (1 - 1e-9)) & (self.max_score is None)   # equal up to round-off counts as drifting
             converged = converged and not drifting.any()
         return StableScores(
             drifting=drifting,
