@@ -169,14 +169,16 @@ CHECKS = [
          against=r"The paper's \texttt{plotting\_funcs.py} and the figures it produced.",
          count=r"2 data files drawn and compared by eye (25 and 403 rows), and @plots@ unit tests.", result="Agree"),
     dict(kind="Published ESS data", title="The paper's published ESS table",
-         what=r"The ESS the engine finds for every CN-only norm at noise 0.01 and 500 steps.",
-         against=r"The paper's file \texttt{tokens\_CmeetsN\_Noise0.01\_B2}.",
-         count=r"403 published ESS rows (302 norms).", result="Open",
-         note=r"The engine finds 359 of them; every ESS it finds with fitness above 0.01 is in the file. 44 published "
-              r"ESS are not found, and the fitness values of the common rows differ by about $5\times10^{-4}$. "
-              r"Re-running the 65 norms where they differed with 200 steps leaves 20 of 113 published ESS missing. "
-              r"The number of steps of the published run is not recorded; fewer steps would explain missing ESS "
-              r"whose chains have not settled."),
+         what=r"The ESS the engine finds for every CN-only norm (1296) at noise 0.01, 500 steps and the paper's "
+              r"fitness threshold 0.01, compared by norm and strategy, and their cooperation levels.",
+         against=r"The paper's file \texttt{tokens\_CmeetsN\_Noise0.01\_B2} (its header says 500 steps).",
+         count=r"403 published ESS rows (302 norms); the same sweep with 200 and 100 steps.", result="Agree*",
+         note=r"The engine finds 359 of the 403 and no ESS that the file lacks; the cooperation levels of the 359 "
+              r"differ by at most $8\times10^{-4}$. The other 44 (in 25 norms) are payoff ties: the invader's payoff "
+              r"is larger than the resident's by at most $3.3\times10^{-16}$, because strategies that differ only "
+              r"where it never matters earn the same payoff and rounding decides. Running 200 steps does not come "
+              r"closer: it finds 362 but adds 33 ESS that the file lacks and the cooperation levels differ by up to "
+              r"0.27 (100 steps: 346 found, 29 extra, up to 0.45). The file's header says 500 steps."),
     # ---------------------------------------------------------------- the scripts
     dict(kind="Script: Markov chain", title="\\texttt{run\\_markov\\_chain.py} on the engine",
          what=r"Rates, class masses and score distributions of every step, and the number of steps.",

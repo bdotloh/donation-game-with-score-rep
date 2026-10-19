@@ -161,7 +161,9 @@ $\rho$ (default $0.99$) against an invader $B$ at $1-\rho$, using the payoffs of
 \item Skip a candidate that earns almost nothing alone ($4\pi<$ \code{fitness\_threshold}): never-helping populations
 are not interesting ESS.
 \item For every invader $B$ of another name: if $A$'s payoff is higher, go on; if lower, $A$ is not an ESS; if equal,
-swap the frequencies and require that $A$ does not do worse than $B$.
+swap the frequencies and require that $A$ does not do worse than $B$. Payoffs are compared exactly, so
+strategies that earn the same payoff up to rounding ($\sim10^{-16}$, e.g.\ they differ only where it never matters) are
+told apart by the rounding.
 \item Finally require $\pi_A\ge10^{-5}$ for the candidate alone with the solver restricted to \code{final\_max\_iter} steps.
 \end{enumerate}
 

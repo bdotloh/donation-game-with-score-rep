@@ -371,15 +371,15 @@
 
 \begin{description}\setlength\itemsep{0pt}
 
-\item[What was checked] The ESS the engine finds for every CN-only norm at noise 0.01 and 500 steps.
+\item[What was checked] The ESS the engine finds for every CN-only norm (1296) at noise 0.01, 500 steps and the paper's fitness threshold 0.01, compared by norm and strategy, and their cooperation levels.
 
-\item[Checked against] The paper's file \texttt{tokens\_CmeetsN\_Noise0.01\_B2}.
+\item[Checked against] The paper's file \texttt{tokens\_CmeetsN\_Noise0.01\_B2} (its header says 500 steps).
 
-\item[How many] 403 published ESS rows (302 norms).
+\item[How many] 403 published ESS rows (302 norms); the same sweep with 200 and 100 steps.
 
-\item[Result] \textbf{Open} (not yet explained)
+\item[Result] \textbf{Agree} (with the exception below)
 
-\item[Note] The engine finds 359 of them; every ESS it finds with fitness above 0.01 is in the file. 44 published ESS are not found, and the fitness values of the common rows differ by about $5\times10^{-4}$. Re-running the 65 norms where they differed with 200 steps leaves 20 of 113 published ESS missing. The number of steps of the published run is not recorded; fewer steps would explain missing ESS whose chains have not settled.
+\item[Note] The engine finds 359 of the 403 and no ESS that the file lacks; the cooperation levels of the 359 differ by at most $8\times10^{-4}$. The other 44 (in 25 norms) are payoff ties: the invader's payoff is larger than the resident's by at most $3.3\times10^{-16}$, because strategies that differ only where it never matters earn the same payoff and rounding decides. Running 200 steps does not come closer: it finds 362 but adds 33 ESS that the file lacks and the cooperation levels differ by up to 0.27 (100 steps: 346 found, 29 extra, up to 0.45). The file's header says 500 steps.
 
 \end{description}
 
@@ -463,7 +463,7 @@
 
 \item[Checked against] The expected behaviour.
 
-\item[How many] 55 unit tests, and 3 browser tests (full click-through, two strategies from a settings file, save and load).
+\item[How many] 64 unit tests, and 3 browser tests (full click-through, two strategies from a settings file, save and load).
 
 \item[Result] \textbf{Agree}
 
@@ -479,7 +479,7 @@
 
 \item[Checked against] The finished run that was saved (2 and 3 strategies).
 
-\item[How many] 18 tests; every point on the simplex, every trajectory step, every matrix and distribution.
+\item[How many] 26 tests; every point on the simplex, every trajectory step, every matrix and distribution.
 
 \item[Result] \textbf{Agree}
 

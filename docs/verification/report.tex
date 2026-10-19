@@ -18,7 +18,7 @@
 
 \title{Verification of the score-based donation game engine}
 \author{}
-\date{14 October 2026}
+\date{18 October 2026}
 
 \begin{document}
 \maketitle
@@ -32,7 +32,7 @@ This report lists the checks made on the engine in \texttt{engine/}, the replica
 \textbf{Two things to know.}
 \begin{itemize}
 \item The notes contain no ternary section, so the ternary results have no printed numbers to be compared with. Checks 10 to 19 check them against independent models, a simulation, closed forms and hand arithmetic instead.
-\item The open check (Check~22) is the paper's published ESS table. The engine finds the published ESS it can be expected to find but misses 44 of 403; the likely cause is the number of steps of the published run, which is not recorded.
+\item Check~22 is the paper's published ESS table. The engine finds 359 of its 403 ESS and no others. The 44 it does not find are payoff ties (the invader's payoff is larger by at most $3.3\times10^{-16}$, so rounding decides). Running 200 steps does not come closer; the published file's header says 500 steps.
 \end{itemize}
 
 \input{summary.tex}
