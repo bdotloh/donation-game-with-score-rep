@@ -208,7 +208,7 @@ def register(app):
         bits = "".join(cn or [])
         return {
             "scores": scores or [],
-            "norm": {"type": "ternary" if len(bits) == 18 else "binary", "tau": validation.positive_int(tau, "τ")[0],
+            "norm": {"type": "ternary" if len(bits) == 18 else "binary", "tau": validation.tau(tau)[0],
                      "CN": bits, "NC": "".join(nc or [])},
             "noise": {"eps": eps, "eps_up": eps_up, "eps_down": eps_down},
             "interactions": {"p_can": q, "benefit": b, "cost": c},
@@ -289,7 +289,7 @@ def register(app):
         """The grid's bits are the norm; the radio and tau follow them, so they can't disagree."""
         trigger = ctx.triggered_id
         grid_type = "ternary" if len(cn) == 18 else "binary"
-        tau_value, tau_error = validation.positive_int(tau, "τ")
+        tau_value, tau_error = validation.tau(tau)
         show, hide = {}, {"display": "none"}
         keep = no_update
         try:
@@ -427,7 +427,7 @@ def experiment_from_inputs(strategies, scores, norm_type, tau, cn, nc, eps, eps_
     norm_type = "ternary" if len(cn) == 18 else "binary"     # the grid's bits decide the type
     tau_value = None
     if norm_type == "ternary":
-        tau_value, error = validation.positive_int(tau, "τ")
+        tau_value, error = validation.tau(tau)
         if error:
             return None, f"Norm: {error}"
     norm = {"type": norm_type, "tau": tau_value, "CN": "".join(cn), "NC": "".join(nc)}

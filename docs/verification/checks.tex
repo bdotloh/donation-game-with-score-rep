@@ -59,7 +59,7 @@
 
 \item[Checked against] The binary engine.
 
-\item[How many] 12 test cases (4 norms $\times$ $\tau\in\{1,2,5\}$), and an ESS sweep of the 1296 CN-only norms lifted to ternary.
+\item[How many] 12 test cases (4 norms $\times$ $\tau\in\{2,3,5\}$), and an ESS sweep of the 1296 CN-only norms lifted to ternary.
 
 \item[Result] \textbf{Agree}
 
@@ -173,7 +173,7 @@
 
 \item[Checked against] an independent re-implementation of the model written from the notes and \texttt{helper\_funcs.jl} without looking at the engine's code (\texttt{tests/independent\_model.py}).
 
-\item[How many] 5000 random configurations: binary, ternary and lifted norms; $\tau\in\{1,2,3,5,8\}$; one to three strategies of mixed kinds (probabilistic and deterministic tables, $\phi\in[0,3]$); noise from 0 to 1; shares of zero; score distributions with mass beyond $\tau$.
+\item[How many] 5000 random configurations: binary, ternary and lifted norms; $\tau\in\{2,3,4,6,9\}$; one to three strategies of mixed kinds (probabilistic and deterministic tables, $\phi\in[0,3]$); noise from 0 to 1; shares of zero; score distributions with mass at or above $\tau$.
 
 \item[Result] \textbf{Agree}
 
@@ -223,7 +223,7 @@
 
 \item[Checked against] The closed form, with the class masses solved self-consistently, independently of the engine.
 
-\item[How many] 100 configurations ($\tau\in\{1,2,3,5,8\}$).
+\item[How many] 100 configurations ($\tau\in\{2,3,4,6,9\}$).
 
 \item[Result] \textbf{Agree}
 
@@ -251,11 +251,11 @@
 
 \begin{description}\setlength\itemsep{0pt}
 
-\item[What was checked] Rates and chains at $\tau=1$, with an empty top class, with $\epsilon=0$, and with a strategy whose share is 0.
+\item[What was checked] Rates and chains at $\tau=2$ (the smallest), with an empty top class, with $\epsilon=0$, and with a strategy whose share is 0.
 
 \item[Checked against] The independent implementation (a population with and without the strategy of share 0).
 
-\item[How many] $\tau=1$: 300; empty top class: 200; $\epsilon=0$: 159; share 0: 200.
+\item[How many] $\tau=2$: 300; empty top class: 200; $\epsilon=0$: 159; share 0: 200.
 
 \item[Result] \textbf{Agree}
 
@@ -303,7 +303,7 @@
 
 \begin{description}\setlength\itemsep{0pt}
 
-\item[What was checked] Rates for tiny populations at $\tau=1$ and $2$: CN against NC, the recipient's index against the donor's, the class boundary at scores $\tau$ and $\tau+1$, the noise arithmetic, the $\phi$-Disc exponent, one step of the chain.
+\item[What was checked] Rates for tiny populations at $\tau=2$ and $3$: CN against NC, the recipient's index against the donor's, the class boundary at scores $\tau-1$ and $\tau$, the noise arithmetic, the $\phi$-Disc exponent, one step of the chain.
 
 \item[Checked against] Numbers written as literal arithmetic from the notes.
 

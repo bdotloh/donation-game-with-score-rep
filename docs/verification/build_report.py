@@ -53,7 +53,7 @@ CHECKS = [
     dict(kind="Lifted ternary", title="A ternary norm that ignores the cut-off against the binary result",
          what=r"A binary norm and binary strategies lifted to ternary classes must give exactly the binary results.",
          against=r"The binary engine.",
-         count=r"12 test cases (4 norms $\times$ $\tau\in\{1,2,5\}$), and an ESS sweep of the 1296 CN-only norms lifted "
+         count=r"12 test cases (4 norms $\times$ $\tau\in\{2,3,5\}$), and an ESS sweep of the 1296 CN-only norms lifted "
                r"to ternary.", result="Agree"),
     # ---------------------------------------------------------------- the notes
     dict(kind="Notes: Defectors and Discriminators", title="The worked example of pages 5 and 6",
@@ -99,9 +99,9 @@ CHECKS = [
     dict(kind="Independent model: rates", title=r"The rates $G,F,g,f$ against an independent implementation",
          what=r"The transition rates for random populations of binary, ternary and $\phi$-Disc strategies.",
          against=INDEP + ".",
-         count=r"5000 random configurations: binary, ternary and lifted norms; $\tau\in\{1,2,3,5,8\}$; one to three "
+         count=r"5000 random configurations: binary, ternary and lifted norms; $\tau\in\{2,3,4,6,9\}$; one to three "
                r"strategies of mixed kinds (probabilistic and deterministic tables, $\phi\in[0,3]$); noise from 0 to 1; "
-               r"shares of zero; score distributions with mass beyond $\tau$.", result="Agree"),
+               r"shares of zero; score distributions with mass at or above $\tau$.", result="Agree"),
     dict(kind="Independent model: chains", title="The score chains over time against the independent implementation",
          what=r"The score distributions after 25 to 400 steps of the chain, with mass conserved.",
          against=r"The independent implementation iterating the same chain.",
@@ -115,16 +115,16 @@ CHECKS = [
     dict(kind="Closed form: ternary", title="Three geometric segments for a class-based ternary strategy",
          what=r"The stationary distribution of one ternary strategy, which is geometric over the three classes.",
          against=r"The closed form, with the class masses solved self-consistently, independently of the engine.",
-         count=r"100 configurations ($\tau\in\{1,2,3,5,8\}$).", result="Agree"),
+         count=r"100 configurations ($\tau\in\{2,3,4,6,9\}$).", result="Agree"),
     dict(kind="Mismatched classes", title="Strategies whose classes differ from the norm's",
          what=r"Rates when a strategy's cut-off $\tau$ differs from the norm's, or a binary strategy meets a ternary "
               r"norm and the other way round (the engine uses the raw scores).",
          against=r"The independent implementation.", count=r"2100 configurations.", result="Agree"),
     dict(kind="Edge cases", title="Awkward settings",
-         what=r"Rates and chains at $\tau=1$, with an empty top class, with $\epsilon=0$, and with a strategy whose "
+         what=r"Rates and chains at $\tau=2$ (the smallest), with an empty top class, with $\epsilon=0$, and with a strategy whose "
               r"share is 0.",
          against=r"The independent implementation (a population with and without the strategy of share 0).",
-         count=r"$\tau=1$: 300; empty top class: 200; $\epsilon=0$: 159; share 0: 200.", result="Agree"),
+         count=r"$\tau=2$: 300; empty top class: 200; $\epsilon=0$: 159; share 0: 200.", result="Agree"),
     dict(kind="Drifting flag", title="Which chains are flagged as drifting",
          what=r"That the engine flags a chain exactly when its up-rate at the top score is positive and at least its "
               r"down-rate.",
@@ -141,8 +141,8 @@ CHECKS = [
               r"the default stopping tolerance leaves the engine short of the stationary law there. The same test "
               r"detects a 10\% error in $\epsilon$ and a 4\% error in the role factor."),
     dict(kind="Hand-computed cases", title="Small cases worked out on paper",
-         what=r"Rates for tiny populations at $\tau=1$ and $2$: CN against NC, the recipient's index against the "
-              r"donor's, the class boundary at scores $\tau$ and $\tau+1$, the noise arithmetic, the $\phi$-Disc "
+         what=r"Rates for tiny populations at $\tau=2$ and $3$: CN against NC, the recipient's index against the "
+              r"donor's, the class boundary at scores $\tau-1$ and $\tau$, the noise arithmetic, the $\phi$-Disc "
               r"exponent, one step of the chain.",
          against=r"Numbers written as literal arithmetic from the notes.", count=r"18 cases.", result="Agree"),
     dict(kind="Planted bugs", title="Would the checks notice a mistake?",

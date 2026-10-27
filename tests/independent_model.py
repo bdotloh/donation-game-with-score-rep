@@ -5,8 +5,8 @@ CN(sn, act, sc) / NC(sn, act, sc) in {-1,0,+1} = score change of the Can / of th
 import numpy as np
 
 def cls(s, tau=None):
-    """score class: binary (tau None) 0 | >=1 ; ternary 0 | 1..tau | >tau"""
-    return 0 if s == 0 else (1 if tau is None or s <= tau else 2)
+    """score class: binary (tau None) 0 | >=1 ; ternary 0 | 1..tau-1 | >=tau"""
+    return 0 if s == 0 else (1 if tau is None or s < tau else 2)
 
 def table_help(name, tau=None):
     """'a,b|c,d' or 'a,b,c|d,e,f|g,h,i' (rows = Need class, cols = Can class; 0, g or a number)"""

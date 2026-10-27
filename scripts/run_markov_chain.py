@@ -87,7 +87,7 @@ def build_parser():
         help=(
             "Three states only (required there): the classes are s = 0, "
             "0 < s < K and s >= K, i.e. the engine's ternary classes with "
-            "tau = K - 1, so K must be at least 2. Omit it (or pass 0) for two states."
+            "tau = K, so K must be at least 2. Omit it (or pass 0) for two states."
         ),
     )
     parser.add_argument(
@@ -383,7 +383,7 @@ def run(args):
         "initial-score-distribution-b",
     )
 
-    tau = args.rich_threshold - 1 if args.n_rep_states == 3 else None
+    tau = args.rich_threshold if args.n_rep_states == 3 else None
     norm = parse_norm(args.cmeetsn, args.nmeetsc, tau)
     strategies = [parse_strategy(args.strategy_a, "strategy-a", tau)]
     inits = [w_a]
@@ -395,7 +395,7 @@ def run(args):
     population = Population(strategies, rho)
 
     # Pad with zeros up to the lowest top-class score, so rates.g and rates.f reach every class.
-    top = 1 if tau is None else tau + 1
+    top = 1 if tau is None else tau
     width = max(top + 1, *(len(w) for w in inits))
     histories, result = run_chains(norm, population, [pad(w, width) for w in inits], args, top)
     width = result.w.shape[1]

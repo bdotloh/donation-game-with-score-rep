@@ -62,7 +62,8 @@ TAIL_TOL = 1e-15        # scores whose mass falls below this everywhere are drop
 
 def class_labels(kind, tau=None):
     if kind == "ternary":
-        return ["0", f"1–{tau}", f">{tau}"]
+        middle = "1" if tau == 2 else (f"1–{tau - 1}" if isinstance(tau, int) else f"1–{tau}−1")
+        return ["0", middle, f"≥{tau}"]
     return ["0", "≥1"]
 
 

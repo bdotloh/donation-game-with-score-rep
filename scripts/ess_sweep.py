@@ -175,7 +175,7 @@ class Sweep:
             population = Population([strategy])
             result = solver(population, self.w_init)
             w = result.w[0]
-            top = (self.args.tau or 0) + 1           # first score of the top class (ternary)
+            top = self.args.tau or 1                 # first score of the top class (ternary)
             w_pad = np.pad(result.w, ((0, 0), (0, max(0, top + 2 - result.w.shape[1]))))
             rates = solver.rates(population, w_pad)  # rates of the final distribution
             g, f = rates.g[0], rates.f[0]
@@ -332,7 +332,7 @@ def build_parser():
 
     run_p = commands.add_parser("run", help="find the ESS for this task's share of the norms")
     run_p.add_argument("--norms", required=True)
-    run_p.add_argument("--tau", type=int, help="cutoff of the ternary classes 0 / 1..tau / >tau")
+    run_p.add_argument("--tau", type=int, help="cutoff of the ternary classes 0 / 1..tau-1 / >=tau (at least 2)")
     run_p.add_argument("--strategies", default="binary", help="candidate strategies (default: binary)")
     run_p.add_argument("--invaders", help="invading strategies (default: the candidates)")
     run_p.add_argument("--out", required=True, help="output directory (e.g. /nfs/scratch/$USER/ess/<name>)")

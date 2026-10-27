@@ -13,7 +13,7 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 import engine as E                      # noqa: E402
 import independent_model as im          # noqa: E402
 
-TAUS = [1, 2, 3, 5, 8]
+TAUS = [2, 3, 4, 6, 9]
 STEP1 = dict(max_iter=1, force_max_iter=True, stop_when_transient=False)
 PAD = lambda a, L: np.hstack([a, np.zeros((a.shape[0], L - a.shape[1]))]) if a.shape[1] < L else a
 
@@ -58,8 +58,8 @@ def rand_w(rng, n, tau):
     L = int(rng.integers(1, 15))
     W = rng.random((n, L)) * (rng.random((n, L)) < 0.7)
     mode = rng.integers(3)
-    if tau and mode == 1: W[:, :tau + 1] = 0.0                       # mass only in class 2
-    if tau and mode == 2: W *= np.where(np.arange(L) > tau, 3.0, 0.3)  # plenty beyond tau
+    if tau and mode == 1: W[:, :tau] = 0.0                           # mass only in class 2
+    if tau and mode == 2: W *= np.where(np.arange(L) >= tau, 3.0, 0.3) # plenty from tau on
     for r in range(n):
         if W[r].sum() == 0: W[r, rng.integers(L)] = 1.0
     return W / W.sum(1, keepdims=True)
@@ -142,7 +142,7 @@ def test_chain_matches_oracle():
         L = max(wm.shape[1], res.w.shape[1])
         assert np.abs(PAD(res.w, L) - PAD(wm, L)).max() < 1e-12 and np.abs(PAD(res.w_prev, L) - PAD(wm_prev, L)).max() < 1e-12
 
-@pytest.mark.parametrize('tau, steps', [(1, 30), (40, 12)])   # tau = 1; tau beyond every occupied score (class 2 empty)
+@pytest.mark.parametrize('tau, steps', [(2, 30), (40, 12)])   # tau = 2 (smallest); tau beyond every occupied score (class 2 empty)
 def test_tau_edge_cases(tau, steps):
     rng = np.random.default_rng(3 + tau)
     for _ in range(25):
@@ -272,15 +272,16 @@ def test_phi0_is_discriminators():
         assert all(np.abs(getattr(R[0], k) - getattr(R[1], k)).max() < 1e-15 for k in 'gfGF')
 
 def class_rates(strat, norm, noise, tau, m):
-    """single class-based strategy: up/down rate of a focal score in class c, for class masses m (representatives 0, 1, tau+1)"""
-    eps, eu, ed = noise; reps = [0, 1] if tau is None else [0, 1, tau + 1]; u, d = [], []
+    """single class-based strategy: up/down rate of a focal score in class c, for class masses m (representatives 0, 1, tau)"""
+    eps, eu, ed = noise; reps = [0, 1] if tau is None else [0, 1, tau]; u, d = [], []
     for j in reps:
         G, F = np.sum([np.array(im.pair([strat], norm, 0, j, 0, l)) * mc for mc, l in zip(m, reps)], axis=0)
         u.append((1 - eps) * G + eps * eu); d.append((1 - eps) * F + eps * ed)
     return np.array(u), np.array([0.0] + d[1:])
 
 def segment_pi(u, d, tau):
-    """three geometric segments: 0 | 1..tau (ratio u1/d1) | > tau (ratio u2/d2); returns pi(j) and the class masses"""
+    """three geometric segments: 0 | 1..tau-1 (ratio u1/d1) | >= tau (ratio u2/d2); returns pi(j) and the class masses"""
+    tau = tau - 1                                               # last score of the middle class
     r1, r2 = u[1] / d[1], u[2] / d[2]; a = u[0] / d[1]
     S1 = tau if abs(r1 - 1) < 1e-14 else (1 - r1 ** tau) / (1 - r1)
     top = a * r1 ** (tau - 1) * u[1] / d[2]

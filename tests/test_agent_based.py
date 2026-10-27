@@ -66,7 +66,7 @@ def simulate(strategies, rho, norm, tau, eps, eps_up, eps_down, w_init, times, s
     perm = rng.permutation(n)
     strat, score = strat[perm], score[perm].astype(np.int32)
     idx = np.arange(n)
-    cls = (lambda s: np.minimum(s, 1)) if K == 2 else (lambda s: (s > 0).astype(int) + (s > tau))
+    cls = (lambda s: np.minimum(s, 1)) if K == 2 else (lambda s: (s > 0).astype(int) + (s >= tau))
     out, t = {}, 0
     for T in sorted(times):
         while t < T:
@@ -161,26 +161,26 @@ DEF_DISC = dict(strategies=[("table", "0,0|0,0"), ("table", "0,0|0,g")], rho=[0.
 # random genuinely ternary norms / probabilistic ternary strategies (drawn once with a fixed seed;
 # in each the engine's chain has a stationary distribution)
 RANDOM = {
-    'tau1': dict(strategies=[('table', '0.576,0.126,g|0.882,0.067,g|0.438,0,0.465'), ('table', '0.603,0.745,g|0,0.757,g|0.839,0.362,0.424')],
+    'tau2': dict(strategies=[('table', '0.576,0.126,g|0.882,0.067,g|0.438,0,0.465'), ('table', '0.603,0.745,g|0,0.757,g|0.839,0.362,0.424')],
              rho=[0.5489, 0.4511],
              norm='CN:+0+0--+0-+-00+-++0 NC:+0++00-00+-++00---',
-             tau=1,
+             tau=2,
              eps=0.2,
              eps_up=0.2,
              eps_down=0.8,
              w_init=[0.5, 0.5]),
-    'tau2': dict(strategies=[('table', 'g,0.158,g|0.591,g,g|0,0,0.563'), ('table', 'g,0,0.411|0,g,0.922|0.749,0.723,0.713')],
+    'tau3': dict(strategies=[('table', 'g,0.158,g|0.591,g,g|0,0,0.563'), ('table', 'g,0,0.411|0,g,0.922|0.749,0.723,0.713')],
              rho=[0.4093, 0.5907],
              norm='CN:++-+-0000+0-+0-00- NC:0+++0+-+0+-++0-+--',
-             tau=2,
+             tau=3,
              eps=0.05,
              eps_up=0.2,
              eps_down=0.8,
              w_init=[1.0]),
-    'tau4': dict(strategies=[('table', '0,0,0|0,g,0.547|0.488,0.64,0'), ('table', '0,0.443,0.782|0.078,0.059,g|0,0.89,0.225'), ('table', '0,0.869,0.813|0,g,0.683|g,g,0')],
+    'tau5': dict(strategies=[('table', '0,0,0|0,g,0.547|0.488,0.64,0'), ('table', '0,0.443,0.782|0.078,0.059,g|0,0.89,0.225'), ('table', '0,0.869,0.813|0,g,0.683|g,g,0')],
              rho=[0.2311, 0.6507, 0.1182],
              norm='CN:+0++-+000+++00-+0+ NC:+0000+++-0-+0-----',
-             tau=4,
+             tau=5,
              eps=0.2,
              eps_up=0.2,
              eps_down=0.8,
@@ -189,7 +189,7 @@ RANDOM = {
 MIXED = dict(strategies=[('phi', 0.5), ('table', '0.465,g,0|0.538,0,0|0.924,0,g')],
          rho=[0.4065, 0.5935],
          norm='CN:+0++0-+000+0+--00- NC:+++00+000-000-+000',
-         tau=1,
+         tau=2,
          eps=0.2,
          eps_up=0.6,
          eps_down=0.4,
@@ -234,7 +234,7 @@ def test_defectors_vs_discriminators_matches_notes():
         assert abs((q * np.arange(len(q))).sum() - mean) <= 6 * sd / np.sqrt(counts[k])
 
 
-@pytest.mark.parametrize("key,seed", [("tau1", 21), ("tau2", 22), ("tau4", 23)])
+@pytest.mark.parametrize("key,seed", [("tau2", 21), ("tau3", 22), ("tau5", 23)])
 def test_random_ternary_norm(key, seed):
     run_and_check(RANDOM[key], [1, 20, 300], seed=seed, label=f"random ternary {key}")
 
@@ -259,7 +259,7 @@ def _transposed(name):
 @pytest.mark.parametrize("mistake", ["rows and columns of every strategy table swapped", "one '+' in CN dropped"])
 def test_the_check_detects_ternary_mistakes(mistake):
     """Same yardsticks, ternary case: an engine that read the tables or the norm wrongly must be rejected."""
-    sc = RANDOM["tau1"]
+    sc = RANDOM["tau2"]
     hist, counts = simulate(**sc, times=[300], seed=21)
     if mistake.startswith("rows"):
         wrong = {**sc, "strategies": [("table", _transposed(spec)) for _, spec in sc["strategies"]]}
@@ -274,7 +274,7 @@ def test_the_check_detects_ternary_mistakes(mistake):
 def test_lifted_binary_norm_gives_the_binary_distribution():
     """A binary norm lifted to ternary classes gives exactly the binary result (engine only)."""
     binary = ScoringNorm.from_barcode(MONEY)
-    for tau in (1, 3):
+    for tau in (2, 4):
         lifted = binary.to_ternary(tau)
         res = []
         for norm, strategies in ((binary, [BinaryStrategy.from_name("0,0|0,0"), BinaryStrategy.from_name("0,0|0,g")]),

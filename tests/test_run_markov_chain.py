@@ -52,7 +52,7 @@ def test_histories_follow_the_saved_rates(case, tmp_path):
     run_dir = rmc.run(args)
     details = json.loads((run_dir / "details.json").read_text())
     k = args.rich_threshold or 1
-    assert details["parameters"]["tau"] == (None if case == "binary" else k - 1)
+    assert details["parameters"]["tau"] == (None if case == "binary" else k)
     for suffix in ("A", "B"):
         _, rates = read_csv(run_dir / f"evo_trans_{suffix}.csv")
         header, scores = read_csv(run_dir / f"score_trans_{suffix}.csv")

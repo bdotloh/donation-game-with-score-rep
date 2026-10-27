@@ -10,7 +10,7 @@ with act = 0 (declines) or 1 (gives). The barcode lists each array in that
 index order, e.g. "CN:00000-00 NC:00000000" for 2 classes (8 characters each).
 
 Binary norms use the classes s = 0 / s >= 1. Ternary norms use
-s = 0 / 0 < s <= tau / s > tau, with 18 characters each. A player in class 0
+s = 0 / 0 < s < tau / s >= tau, with 18 characters each. A player in class 0
 cannot lose a score.
 """
 

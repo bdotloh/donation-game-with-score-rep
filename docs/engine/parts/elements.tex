@@ -15,7 +15,7 @@ A partition is given by increasing positive \emph{cutoffs} $x_1<x_2<\dots$. Clas
 $x_c\le j<x_{c+1}$, taking $x_0=0$ and $x_{\text{last}+1}=\infty$; so $m$ cutoffs give $m+1$ classes.
 \code{classify} is a binary search (\code{numpy.searchsorted}) of the score among the cutoffs. Two partitions are equal
 when their cutoffs are. \code{PossessionPartition} is the cutoff list $(1)$: class $0$ is $s=0$, class $1$ is $s\ge1$.
-\code{TernaryPartition(tau)} is $(1,\tau+1)$: $s=0$, $1\le s\le\tau$, $s>\tau$.
+\code{TernaryPartition(tau)} is $(1,\tau)$: $s=0$, $1\le s\le\tau-1$, $s\ge\tau$ (so $\tau\ge2$).
 
 \paramsh
 \begin{params}

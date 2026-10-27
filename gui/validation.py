@@ -109,6 +109,14 @@ def positive_int(value, what):
     return int(x), ""
 
 
+def tau(value):
+    """The ternary cut-off: classes 0 / 1..tau-1 / >= tau, so tau is at least 2."""
+    x, error = positive_int(value, "τ")
+    if not error and x >= 2:
+        return x, ""
+    return None, "τ must be a whole number, 2 or more."
+
+
 def non_negative(value, what):
     x = parse_number(value)
     if x is None or x < 0:

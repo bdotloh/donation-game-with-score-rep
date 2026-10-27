@@ -22,30 +22,30 @@ def test_hand_computed_cases():
         results.append(name)
     D3 = lambda tau: TernaryStrategy.from_name("0,0,0|0,0,0|0,0,0", tau)
     w4 = [[.1, .2, .3, .4]]
-    # A: tau=1. Defector Can with score 1 (class1) declines to Need class 2 (mass .7) -> loses. F_1=.25*.7
-    r = rates(norm3({(2,0,1):'-'}, {}, 1), [D3(1)], [1.], w4); check("A CN idx13 tau=1", r.F[0,1:4], [.175, 0, 0])
+    # A: tau=2. Defector Can with score 1 (class1) declines to Need class 2 (mass .7) -> loses. F_1=.25*.7
+    r = rates(norm3({(2,0,1):'-'}, {}, 2), [D3(2)], [1.], w4); check("A CN idx13 tau=2", r.F[0,1:4], [.175, 0, 0])
     # A': NC: Need class 2 (score>=2) loses when Can class 1 (mass .2) declines. F_2=F_3=.25*.2
-    r = rates(norm3({}, {(2,0,1):'-'}, 1), [D3(1)], [1.], w4); check("A' NC idx13 tau=1", r.F[0,1:4], [0, .05, .05])
-    # B: tau=1 strategy helps need class1 (score 1, mass .2) when can class 2; CN[1][1][2]='+': can score>=2 gains
-    st = TernaryStrategy.from_name("0,0,0|0,0,g|0,0,0", 1)
-    r = rates(norm3({(1,1,2):'+'}, {}, 1), [st], [1.], w4); check("B tau=1", r.G[0,1:5], [0, 0, .05, .05])
-    st2 = TernaryStrategy.from_name("0,0,0|0,0,g|0,0,0", 2)   # tau=2: need class1 = scores1,2 (mass .5), can class2 = score>=3 (j-1=3 -> G_4)
-    r = rates(norm3({(1,1,2):'+'}, {}, 2), [st2], [1.], w4); check("B tau=2", r.G[0,1:5], [0, 0, 0, .125])
-    # D: tau=2 uniform on 0..4; helps iff need class1 & can class1; CN[1][1][1] '+'
+    r = rates(norm3({}, {(2,0,1):'-'}, 2), [D3(2)], [1.], w4); check("A' NC idx13 tau=2", r.F[0,1:4], [0, .05, .05])
+    # B: tau=2 strategy helps need class1 (score 1, mass .2) when can class 2; CN[1][1][2]='+': can score>=2 gains
+    st = TernaryStrategy.from_name("0,0,0|0,0,g|0,0,0", 2)
+    r = rates(norm3({(1,1,2):'+'}, {}, 2), [st], [1.], w4); check("B tau=2", r.G[0,1:5], [0, 0, .05, .05])
+    st2 = TernaryStrategy.from_name("0,0,0|0,0,g|0,0,0", 3)   # tau=3: need class1 = scores1,2 (mass .5), can class2 = score>=3 (j-1=3 -> G_4)
+    r = rates(norm3({(1,1,2):'+'}, {}, 3), [st2], [1.], w4); check("B tau=3", r.G[0,1:5], [0, 0, 0, .125])
+    # D: tau=3 uniform on 0..4; helps iff need class1 & can class1; CN[1][1][1] '+'
     wu = [[.2]*5]
-    st = TernaryStrategy.from_name("0,0,0|0,g,0|0,0,0", 2)
-    r = rates(norm3({(1,1,1):'+'}, {}, 2), [st], [1.], wu); check("D CN tau=2", r.G[0,1:6], [0, .1, .1, 0, 0])
-    r = rates(norm3({}, {(1,1,1):'+'}, 2), [st], [1.], wu); check("D NC tau=2", r.G[0,1:6], [0, .1, .1, 0, 0])
+    st = TernaryStrategy.from_name("0,0,0|0,g,0|0,0,0", 3)
+    r = rates(norm3({(1,1,1):'+'}, {}, 3), [st], [1.], wu); check("D CN tau=3", r.G[0,1:6], [0, .1, .1, 0, 0])
+    r = rates(norm3({}, {(1,1,1):'+'}, 3), [st], [1.], wu); check("D NC tau=3", r.G[0,1:6], [0, .1, .1, 0, 0])
     # E: help need class2 from can class1 ("0,0,0|0,0,0|0,g,0"): CN[2][1][1]='+' -> G_2,G_3 =.25*.4 ; NC[2][1][1]='+' -> G_4,G_5
+    st = TernaryStrategy.from_name("0,0,0|0,0,0|0,g,0", 3)
+    r = rates(norm3({(2,1,1):'+'}, {}, 3), [st], [1.], wu); check("E CN tau=3", r.G[0,1:6], [0, .1, .1, 0, 0])
+    r = rates(norm3({}, {(2,1,1):'+'}, 3), [st], [1.], wu); check("E NC tau=3", r.G[0,1:6], [0, 0, 0, .1, .1])
+    # E2: tau=2 same on w4: need class2 mass .7, can class1 = score1 (mass .2): CN: G_2 = .25*.7 ; NC: need class2 = scores>=2: G_3,G_4 = .25*.2
     st = TernaryStrategy.from_name("0,0,0|0,0,0|0,g,0", 2)
-    r = rates(norm3({(2,1,1):'+'}, {}, 2), [st], [1.], wu); check("E CN tau=2", r.G[0,1:6], [0, .1, .1, 0, 0])
-    r = rates(norm3({}, {(2,1,1):'+'}, 2), [st], [1.], wu); check("E NC tau=2", r.G[0,1:6], [0, 0, 0, .1, .1])
-    # E2: tau=1 same on w4: need class2 mass .7, can class1 = score1 (mass .2): CN: G_2 = .25*.7 ; NC: need class2 = scores>=2: G_3,G_4 = .25*.2
-    st = TernaryStrategy.from_name("0,0,0|0,0,0|0,g,0", 1)
-    r = rates(norm3({(2,1,1):'+'}, {}, 1), [st], [1.], w4); check("E2 CN tau=1", r.G[0,1:5], [0, .175, 0, 0])
-    r = rates(norm3({}, {(2,1,1):'+'}, 1), [st], [1.], w4); check("E2 NC tau=1", r.G[0,1:5], [0, 0, .05, .05])
+    r = rates(norm3({(2,1,1):'+'}, {}, 2), [st], [1.], w4); check("E2 CN tau=2", r.G[0,1:5], [0, .175, 0, 0])
+    r = rates(norm3({}, {(2,1,1):'+'}, 2), [st], [1.], w4); check("E2 NC tau=2", r.G[0,1:5], [0, 0, .05, .05])
     # noise arithmetic: g = (1-eps)G + eps*up ; f = (1-eps)F + eps*down, nothing down from 0
-    r = rates(norm3({(2,0,1):'-'}, {}, 1), [D3(1)], [1.], w4, eps=.2, up=.3, down=.7)
+    r = rates(norm3({(2,0,1):'-'}, {}, 2), [D3(2)], [1.], w4, eps=.2, up=.3, down=.7)
     check("noise f", r.f[0,:4], [0, .8*.175+.14, .14, .14]); check("noise g", r.g[0,1:4], [.06]*3)
     # C: phi-Disc, two strategies. phi-Disc rho .5 w0=.2 ; Defectors rho .5 w0=.6; need pos mass = .5*.8+.5*.4=.6
     cnphi = ScoringNorm.from_barcode("CN:00000-0+ NC:00000000")

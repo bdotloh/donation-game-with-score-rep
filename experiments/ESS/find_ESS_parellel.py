@@ -44,7 +44,7 @@ def bigb_name(norm):
 
 
 def class_tau(n_rep_states, rich_threshold):
-    """The engine's tau (None for binary). Classes {0}, {1..k-1}, {>=k} with k = rich_threshold are tau = k - 1."""
+    """The engine's tau (None for binary). Classes {0}, {1..k-1}, {>=k} with k = rich_threshold are tau = k."""
     if n_rep_states == 2:
         if rich_threshold not in (None, 0):
             raise ValueError("For n_rep_states=2, rich_threshold must be None or 0.")
@@ -52,7 +52,7 @@ def class_tau(n_rep_states, rich_threshold):
     if n_rep_states == 3:
         if rich_threshold is None or rich_threshold < 2:
             raise ValueError("For n_rep_states=3, rich_threshold must be an integer >= 2.")
-        return rich_threshold - 1
+        return rich_threshold
     raise NotImplementedError(f"n_rep_states {n_rep_states} not implemented. Only 2 or 3 are supported.")
 
 
@@ -63,7 +63,7 @@ def make_strategy(name, tau):
 def class_rates(solver, population, w, tau):
     """alpha, beta, gamma (binary) or alpha, beta1, gamma1, beta2, gamma2 (ternary) of strategy 0:
     up-rate from score 0, and up/down rates of a score in the middle (and top) class."""
-    top = 1 if tau is None else tau + 1         # lowest score of the top class
+    top = 1 if tau is None else tau             # lowest score of the top class
     pad = max(0, top + 1 - w.shape[1])     # rates are only given at tracked scores
     rates = solver.rates(population, np.pad(w, ((0, 0), (0, pad))))
     g, f = rates.g[0], rates.f[0]

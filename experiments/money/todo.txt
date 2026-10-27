@@ -1,0 +1,31 @@
+money norm means population of rational agents who exchange scores for help. 
+exchange happens when one in need meets one who can.
+one in need gains b (in terms of fitness) and loses 1 score. 
+one who cans loses c (in terms of fitness) and gains 1 score. 
+
+under the following assumptions, the score distribution has an equilibrium that is geometric.
+
+the following assumptions:
+0. a large an unstructured unpopulation. 
+The chance of meeting an agent of a certain type is given by the proportion of that type in the population
+1. everyone who has at least a score has some chance of losing one. everyone has some chance of gaining a score.
+ the chance of losing one is more than the chance of gaining one
+
+let r be the ratio between the chance of gaining (\epsilon_\up) and losing a score (\epsilon_\down). by assumption 1, r <1.
+let \pi_j be the proportion of the population with j score at the equilibrium distribution.
+\pi_0 = (1-r)
+\pi_j = r^j \pi_0 = r^j (1-r)
+
+the helping rate under the money norm is (1-\pi_0)^2 = (1-(1-r))^2 = r^2 
+
+suppose rho proportion of agents who follow the money norm undergo some kind of mutation. 
+these mutants still do "score for help", but they stop doing it once they have some number of score, say \tau. 
+can the mutants invade? 
+
+if rho < k then there is an analytical score distribution. 
+assume rho <k.
+then the mutants can invade if b/c < c(\tau,...)
+
+
+
+

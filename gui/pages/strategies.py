@@ -125,7 +125,7 @@ def register(app):
                 preset = None
                 if name in spec.STRATEGY_PRESETS:
                     name = ""
-        tau_value, _ = validation.positive_int(tau, "τ")
+        tau_value, _ = validation.tau(tau)
         hide, show = {"display": "none"}, {}
         grid_children = grid(kind, P, tau_value or "τ") if kind != "phi" else None
         return (grid_children, show if kind == "ternary" else hide, show if kind == "phi" else hide, kind, name,
@@ -251,7 +251,7 @@ def current_strategy(kind, matrix, tau, phi, name, p0="0"):
     n = 3 if kind == "ternary" else 2
     tau_value = None
     if kind == "ternary":
-        tau_value, error = validation.positive_int(tau, "τ")
+        tau_value, error = validation.tau(tau)
         if error:
             return None, error
     if matrix is None:

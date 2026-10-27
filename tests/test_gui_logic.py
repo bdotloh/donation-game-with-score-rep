@@ -303,7 +303,7 @@ def test_results_show_the_strategies():
     assert [t.split()[0] for t in text] == ["S1", "S2", "S3"]
     assert "AllD-Disc" in text[0] and "initial share" not in text[0]
     assert text[0].count("0.5") == 0 and "score 0" in text[0] and "score ≥1" in text[0]   # the 2x2 decision table
-    assert "score 1–2" in text[1] and "score >2" in text[1] and "0.5" in text[1]           # ternary: labels by class
+    assert "score 1 " in text[1] and "score ≥2" in text[1] and "0.5" in text[1]              # ternary: labels by class
     assert "donor score" in text[2] and "p(help)" in text[2]                               # phi-Disc: by donor score
     assert not any(isinstance(x, dcc.Graph) for c in cards for x in c.children)
     with_surfaces = strategy_cards(run, surfaces=True)
@@ -368,7 +368,7 @@ def test_results_show_the_score_update_norm():
     assert "CN:00000-0+ NC:00000000" in text and "Reading the barcode" not in text and "symbols" not in text
     assert "score ≥1, declines" in text and "\u22121" in text and "+1" in text
     ternary = _text(norm_view({"type": "ternary", "tau": 3, "CN": "0" * 18, "NC": "0" * 18}))
-    assert "score 1\u20133" in ternary and "τ = 3" in ternary
+    assert "score 1\u20132" in ternary and "score ≥3" in ternary and "τ = 3" in ternary
 
 
 def _finished_run():

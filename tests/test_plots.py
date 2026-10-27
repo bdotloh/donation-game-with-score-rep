@@ -117,7 +117,7 @@ def test_ternary_figure():
             row("0" * 8 + "+0" + "0" * 8, "0,0,0|0,g,0|0,g,g", 0.6, nc="0" * 18, tau=3)]
     fig = ess_figure(rows)
     all_text = [t for ax in fig.axes for t in texts(ax)]
-    assert "1–3" in all_text and ">3" in all_text                  # class labels of the header
+    assert "1–2" in all_text and "≥3" in all_text                  # class labels of the header
     assert "0,0,0|0,g,0|0,g,g" in all_text
     fig.canvas.draw()
 

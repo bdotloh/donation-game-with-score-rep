@@ -159,7 +159,7 @@ def test_phi_disc_phi_0_is_discriminators():
 
 
 @pytest.mark.parametrize("barcode", BARCODES)
-@pytest.mark.parametrize("tau", [1, 2, 5])
+@pytest.mark.parametrize("tau", [2, 3, 5])
 def test_ternary_that_ignores_tau_matches_binary(barcode, tau):
     norm = ScoringNorm.from_barcode(barcode)
     binary = [BinaryStrategy.from_name("0,g|0,g"), BinaryStrategy.from_name("0,0|0.3,g")]
@@ -177,11 +177,11 @@ def test_ternary_that_ignores_tau_matches_binary(barcode, tau):
 
 
 def test_ternary_strategy_uses_tau():
-    """Helping only receivers above tau differs from helping every receiver with a score."""
-    norm = ScoringNorm.from_barcode("CN:00000-0+ NC:00000000").to_ternary(tau=2)
+    """Helping only receivers at or above tau differs from helping every receiver with a score."""
+    norm = ScoringNorm.from_barcode("CN:00000-0+ NC:00000000").to_ternary(tau=3)
     solver = StableScoreSolver(norm, Noise(0.1, 0.3, 0.5), max_iter=2000)
-    rich_only = TernaryStrategy.from_name("0,0,0|0,0,0|0,g,g", tau=2)
-    everyone = TernaryStrategy.from_name("0,0,0|0,g,g|0,g,g", tau=2)
+    rich_only = TernaryStrategy.from_name("0,0,0|0,0,0|0,g,g", tau=3)
+    everyone = TernaryStrategy.from_name("0,0,0|0,g,g|0,g,g", tau=3)
     w_rich = solver(Population([rich_only]), [0.5, 0.5]).w
     w_all = solver(Population([everyone]), [0.5, 0.5]).w
     assert not np.allclose(w_rich[0, :5], w_all[0, :5])

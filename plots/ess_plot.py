@@ -166,7 +166,7 @@ def _draw_header(ax, n, tau):
     ax.set_xlim(-0.5, cells - 0.5)
     ax.set_ylim(0, 3)
     ax.axis("off")
-    classes = ["0", "1"] if n == 2 else ["0", f"1–{tau}", f">{tau}"]
+    classes = ["0", "1"] if n == 2 else ["0", "1" if tau == 2 else f"1–{tau - 1}", f"≥{tau}"]
     action = ["·", "☺"]                        # nothing given, help given
     rows = [("Donor", 1, classes * (2 * n)), ("Action", n, action * n), ("Recvr", 2 * n, classes)]
     font = 8 if n == 2 else 6

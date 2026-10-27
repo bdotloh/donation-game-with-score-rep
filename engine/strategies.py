@@ -10,7 +10,7 @@ supplies
 for j = 0, ..., n_scores - 1. This covers
 
     BinaryStrategy   classes s = 0 / s >= 1, a 2x2 table of probabilities
-    TernaryStrategy  classes s = 0 / 0 < s <= tau / s > tau, a 3x3 table
+    TernaryStrategy  classes s = 0 / 0 < s < tau / s >= tau, a 3x3 table
     PhiDisc          helps a receiver with positive score with probability
                      j^(-phi) when the donor has score j >= 1, with probability
                      p0 (default 0, never) when the donor has score 0

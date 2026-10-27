@@ -49,13 +49,13 @@ class PossessionPartition(ScorePartition):
 
 
 class TernaryPartition(ScorePartition):
-    """Ternary classes: s = 0 / 0 < s <= tau / s > tau."""
+    """Ternary classes: s = 0 / 0 < s < tau / s >= tau."""
 
     def __init__(self, tau):
-        if int(tau) < 1:
-            raise ValueError(f"tau must be a positive integer; got {tau}.")
+        if int(tau) < 2:
+            raise ValueError(f"tau must be an integer >= 2 (the middle class 1..tau-1 is empty otherwise); got {tau}.")
         self.tau = int(tau)
-        super().__init__((1, self.tau + 1))
+        super().__init__((1, self.tau))
 
     def __repr__(self):
         return f"TernaryPartition(tau={self.tau})"
