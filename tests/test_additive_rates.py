@@ -10,7 +10,7 @@ from engine import (BinaryStrategy, Defectors, Discriminators, Noise, Payoffs, P
 EPS, EPS_UP, EPS_DOWN, LAMBDA = 0.1, 0.49, 0.51, 0.25
 NORMS = {                                       # the norms of the talk
     "Money": "CN:000000++ NC:000000--",
-    "phi-Disc norm": "CN:00000-0+ NC:00000000",
+    "Lose a score for not helping": "CN:00000-00 NC:00000000",
     "Coercive money": "CN:00000-++ NC:00000+--",
 }
 
@@ -79,15 +79,18 @@ def test_from_old_rates_are_the_old_rates_divided_by_one_minus_eps():
     assert not new.f[:, 0].any()
 
 
+DISC = BinaryStrategy.from_name("0,0|g,g")      # helps a receiver with a score, whatever its own score
+
+
 def coercive_money(eta_up, eta_down, epsilon=0.01):
     norm = ScoringNorm.from_barcode(NORMS["Coercive money"])
     solver = StableScoreSolver(norm, Noise(eta_up, eta_down, epsilon), tol=1e-12, max_iter=100_000, tail_tol=1e-15)
-    return solver(Population([Discriminators()]), np.array([[0.5, 0.5]]))
+    return solver(Population([DISC]), np.array([[0.5, 0.5]]))
 
 
 @pytest.mark.parametrize("eta_down, w0, mean", [(0.01, 0.5, 1.005), (0.0067, 0.254, 2.963)])
 def test_discriminators_under_coercive_money(eta_down, w0, mean):
-    """w_0 = 1 - eta_up / eta_down whatever lambda and epsilon are; w_j = r0 r1^(j-1) w_0."""
+    """All players are Disc-Disc ('0,0|g,g'). w_0 = 1 - eta_up / eta_down whatever lambda and epsilon are; w_j = r0 r1^(j-1) w_0."""
     eta_up, epsilon = 0.005, 0.01
     result = coercive_money(eta_up, eta_down, epsilon)
     assert not result.drifting.any()
@@ -109,7 +112,7 @@ def test_w0_does_not_depend_on_lambda_or_epsilon():
         for role in (0.1, 0.25):
             norm = ScoringNorm.from_barcode(NORMS["Coercive money"])
             solver = StableScoreSolver(norm, Noise(0.005, 0.01, epsilon), tol=1e-12, max_iter=100_000, role_factor=role)
-            assert solver(Population([Discriminators()]), np.array([[0.5, 0.5]])).w[0, 0] == pytest.approx(0.5, abs=1e-6)
+            assert solver(Population([DISC]), np.array([[0.5, 0.5]])).w[0, 0] == pytest.approx(0.5, abs=1e-6)
 
 
 def test_without_extra_rates_and_errors_the_results_are_the_old_no_noise_results():
@@ -152,9 +155,9 @@ def test_extra_rates_are_checked():
 
 
 def test_there_is_no_cap_on_the_score():
-    """With eta_up > eta_down the mass keeps moving up: the solver adds a score every step and reports drifting."""
-    norm = ScoringNorm.from_barcode(NORMS["Coercive money"])
-    result = StableScoreSolver(norm, Noise(0.02, 0.01), max_iter=300, force_max_iter=True)(Population([Discriminators()]),
+    """If every interaction gains a token the mass keeps moving up: a score is added every step and nothing stops it."""
+    norm = ScoringNorm.from_barcode("CN:++++++++ NC:00000000")
+    result = StableScoreSolver(norm, Noise(0.02, 0.01), max_iter=300, force_max_iter=True)(Population([DISC]),
                                                                                            np.array([[0.5, 0.5]]))
     assert result.w.shape[1] > 100 and result.drifting.all()
     assert not hasattr(StableScoreSolver(norm), "max_score")
@@ -165,10 +168,10 @@ def test_the_tail_cutoff_is_only_numerical():
     norm = ScoringNorm.from_barcode(NORMS["Coercive money"])
     kw = dict(tol=1e-13, max_iter=50_000)
     w0 = np.array([[0.5, 0.5]])
-    exact = StableScoreSolver(norm, Noise(0.005, 0.01), **kw)(Population([Discriminators()]), w0).w[0]
+    exact = StableScoreSolver(norm, Noise(0.005, 0.01), **kw)(Population([DISC]), w0).w[0]
     distance = {}
     for tail in (1e-15, 1e-12):
-        cut = StableScoreSolver(norm, Noise(0.005, 0.01), tail_tol=tail, **kw)(Population([Discriminators()]), w0).w[0]
+        cut = StableScoreSolver(norm, Noise(0.005, 0.01), tail_tol=tail, **kw)(Population([DISC]), w0).w[0]
         assert abs(cut.sum() - 1) < 1e-14
         L = min(len(cut), len(exact))
         distance[tail] = np.abs(cut[:L] - exact[:L]).max()
