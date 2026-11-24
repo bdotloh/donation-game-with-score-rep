@@ -30,7 +30,7 @@ def closed_form_lam(p, q):
 
 
 def check(p, q):
-    noise = Noise(eps=1.0, eps_up=p, eps_down=q)
+    noise = Noise.from_old(1.0, p, q)
     solver = StableScoreSolver(norm, noise, tol=tol, max_iter=200_000, criterion="tv")
     result = solver(pop, [1.0])                 # start with everyone at score 0
     tv = result.tv[:, 0]

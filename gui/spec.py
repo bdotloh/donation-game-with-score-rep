@@ -4,8 +4,9 @@ strategy: {"type": "binary" | "ternary" | "phi", "name": str, "P": [[p, ...], ..
            "p0": float}   (p0: phi-Disc only, the probability that a donor with score 0 helps; optional, default 0)
 norm:     {"type": "binary" | "ternary", "tau": int, "CN": "8 or 18 of -0+", "NC": "..."}
 experiment: {"version": 1, "strategies": [...], "scores": [{"score", "mass"}, ...],
-             "norm": {...}, "noise": {"eps", "eps_up", "eps_down"}, "p_can", "benefit", "cost",
-             "max_iter", "tol", "resolution", "full_steps", "max_score" (optional: no scores above it)}
+             "norm": {...}, "noise": {"eta_up", "eta_down", "epsilon"}, "p_can", "benefit", "cost",
+             "max_iter", "tol", "resolution", "full_steps"}
+(older files hold "noise": {"eps", "eps_up", "eps_down"}; noise_values() converts it with Noise.from_old, and a file's "max_score" is ignored: scores have no cap.)
 (older files also hold "shares", "dt" and "n_steps"; the starting point, step size and number of steps of an
 evolution are now chosen on the results page, and "dt" and "n_steps" here only set its defaults.)
 full_steps: run every score chain for max_iter steps instead of stopping at the tolerance.
@@ -128,16 +129,24 @@ def w_init(scores):
     return w / w.sum()
 
 
+def noise_values(experiment):
+    """{"eta_up", "eta_down", "epsilon"} of an experiment; the old {"eps", "eps_up", "eps_down"} is converted."""
+    values = experiment["noise"]
+    if "eps" in values:
+        old = Noise.from_old(float(values["eps"]), float(values["eps_up"]), float(values["eps_down"]))
+        return {"eta_up": old.eta_up, "eta_down": old.eta_down, "epsilon": 0.0}
+    return {k: float(values[k]) for k in ("eta_up", "eta_down", "epsilon")}
+
+
 def build(experiment):
     """Engine objects for an experiment: strategies, w_init, ReplicatorDynamics."""
     strategies = [build_strategy(s) for s in experiment["strategies"]]
     norm = build_norm(experiment["norm"])
-    noise = Noise(**experiment["noise"])
+    noise = Noise(**noise_values(experiment))
     roles = role_factor(experiment.get("p_can", 0.5))
     solver = StableScoreSolver(norm, noise, tol=experiment["tol"], max_iter=experiment["max_iter"], role_factor=roles,
-                               force_max_iter=bool(experiment.get("full_steps", False)), tail_tol=TAIL_TOL,
-                               max_score=experiment.get("max_score"))
-    payoffs = Payoffs(benefit=experiment["benefit"], cost=experiment["cost"], role_factor=roles)
+                               force_max_iter=bool(experiment.get("full_steps", False)), tail_tol=TAIL_TOL)
+    payoffs = Payoffs(benefit=experiment["benefit"], cost=experiment["cost"], role_factor=roles, epsilon=noise.epsilon)
     dynamics = ReplicatorDynamics(solver, payoffs, dt=experiment.get("dt", DEFAULT_ADVANCED["dt"]))
     return {
         "strategies": strategies,
@@ -179,7 +188,7 @@ def check(experiment):
         _, error = validation.score_distribution(scores)
         if error:
             return error
-        _, error = validation.noise(*(experiment["noise"].get(k) for k in ("eps", "eps_up", "eps_down")))
+        _, error = validation.noise(*noise_values(experiment).values())
         if error:
             return error
         q = validation.parse_number(experiment.get("p_can", 0.5))
@@ -192,8 +201,8 @@ def check(experiment):
             dt = validation.parse_number(experiment["dt"])
             if dt is None or dt <= 0:
                 return "The step size must be positive."
-        for key in ("n_steps", "max_iter", "resolution", "max_score"):
-            if key not in experiment and key in ("n_steps", "max_score"):
+        for key in ("n_steps", "max_iter", "resolution"):
+            if key not in experiment and key == "n_steps":
                 continue
             if validation.positive_int(experiment[key], key)[1]:
                 return f"{key} must be a whole number, 1 or more."

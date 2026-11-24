@@ -39,7 +39,7 @@ ternary_name = "0,0,0|g,g,0|g,g,0"
 norm = ScoringNorm.from_barcode("CN:000000++ NC:000000--")
 eps, eps_up = 0.1, 0.49
 eps_down = 1 - eps_up
-noise = Noise(eps=eps, eps_up=eps_up, eps_down=eps_down)
+noise = Noise.from_old(eps, eps_up, eps_down)
 rho = 0.01
 benefit, cost = 2.0, 1.0
 TAU_MAX = 1000

@@ -52,7 +52,7 @@ def rand_spec(rng, kind=None, n=None, tau=None):
         rho[rng.integers(n)] = 0.0
         rho = rho / rho.sum() if rho.sum() > 0 else np.ones(n) / n
     eu = float(rng.uniform())
-    return dict(norm=norm, strats=strats, rho=rho.tolist(), noise=(float(rng.choice([0.0, 0.1, 0.5, 1.0])), eu, 1 - eu))
+    return dict(norm=norm, strats=strats, rho=rho.tolist(), noise=(float(rng.choice([0.0, 0.1, 0.5, 0.9])), eu, 1 - eu))
 
 def rand_w(rng, n, tau):
     L = int(rng.integers(1, 15))
@@ -77,7 +77,7 @@ def engine(spec):
           'phi': lambda x: E.PhiDisc(x[1]), 'defector': lambda x: E.Defectors(), 'disc': lambda x: E.Discriminators()}
     code, tau, lifted = spec['norm']
     norm = E.ScoringNorm.from_barcode(code).to_ternary(tau) if lifted else E.ScoringNorm.from_barcode(code, tau)
-    return E.Population([mk[x[0]](x) for x in spec['strats']], rho=spec['rho']), norm, E.Noise(*spec['noise'])
+    return E.Population([mk[x[0]](x) for x in spec['strats']], rho=spec['rho']), norm, E.Noise.from_old(*spec['noise'])
 
 def solver(norm, noise, **kw):
     return E.StableScoreSolver(norm, noise, **kw)
@@ -98,6 +98,7 @@ def julia_like(strats, norm, noise, rho, w0, maxn, tol=1e-5):
     while count < maxn and chg > tol:
         count += 1; L = w.shape[1]
         _, _, up, down = im.rates(K, noise, rho, w)
+        up, down = (1 - noise[0]) * up, (1 - noise[0]) * down                 # helper_funcs.jl runs at the old speed
         trans = np.array([[up[i, 0], up[i, min(1, L - 1)], down[i, min(1, L - 1)]] for i in range(n)])
         dw = np.zeros((n, L + 1)); dw[:, :L] -= w * (up + down); dw[:, 1:] += w * up; dw[:, :L - 1] += (w * down)[:, 1:]
         w, chg = np.hstack([w, np.zeros((n, 1))]) + dw, np.abs(dw).max()
@@ -171,7 +172,7 @@ def test_lifted_binary_equals_binary():
     rng = np.random.default_rng(5)
     for _ in range(25):
         code, tau = rand_barcode(rng, 2), int(rng.choice(TAUS)); strats = [E.BinaryStrategy.from_name(rand_table(rng, 2, 0.5)), E.PhiDisc(1.2)]
-        rho, noise = [0.7, 0.3], E.Noise(0.2, 0.3, 0.7); w0 = rand_w(rng, 2, tau)
+        rho, noise = [0.7, 0.3], E.Noise.from_old(0.2, 0.3, 0.7); w0 = rand_w(rng, 2, tau)
         kw = dict(tol=1e-300, max_iter=40, force_max_iter=True, stop_when_transient=False)
         ws = [solver(n, noise, **kw)(E.Population(strats, rho=rho), w0).w for n in
               (E.ScoringNorm.from_barcode(code), E.ScoringNorm.from_barcode(code).to_ternary(tau), E.ScoringNorm.from_barcode(im.lift_code(code), tau))]
@@ -202,7 +203,7 @@ def test_stationary_is_invariant_under_one_engine_step():
 def test_engine_converges_to_oracle_stationary():
     rng = np.random.default_rng(7); n_checked = 0
     for _ in range(40):
-        spec = rand_spec(rng, n=2); eu = 0.3 * rng.random(); spec['noise'] = (float(rng.choice([0.5, 1.0])), eu, 1 - eu)
+        spec = rand_spec(rng, n=2); eu = 0.3 * rng.random(); spec['noise'] = (float(rng.choice([0.5, 0.9])), eu, 1 - eu)
         w, s, nm = stable_oracle(spec, S=80)
         if w is None: continue
         pop, norm, noise = engine(spec)
@@ -216,7 +217,7 @@ def test_engine_converges_to_oracle_stationary():
 
 # ------------------------------------------------------------------ closed forms from the notes
 def test_notes_page6_defectors_vs_discriminators():
-    norm, noise = E.ScoringNorm.from_barcode('CN:00000-00 NC:00000000'), E.Noise(0.1, 0.4, 0.6)
+    norm, noise = E.ScoringNorm.from_barcode('CN:00000-00 NC:00000000'), E.Noise.from_old(0.1, 0.4, 0.6)
     pop = E.Population([E.Defectors(), E.Discriminators()], rho=[0.5, 0.5])
     res = solver(norm, noise, tol=1e-12, max_iter=5000)(pop, np.full((2, 2), 0.5))   # relaxation time ~400 steps: ~1e-7 error left
     j = np.arange(res.w.shape[1])
@@ -231,14 +232,14 @@ def phi_rates_notes(w0, phi, eps, eu, ed, L):
     j = np.arange(1, L + 1.0)
     G = np.concatenate([[0.0], (1 - w0) / (4 * (j[1:] - 1) ** phi)])
     F = (1 - w0) / 4 * (1 - j[:L - 1] ** -phi)
-    return (1 - eps) * G + eps * eu, (1 - eps) * F + eps * ed
+    return G + eps * eu / (1 - eps), F + eps * ed / (1 - eps)
 
 def test_phi_disc_rates_match_page7():
     rng = np.random.default_rng(8); norm = E.ScoringNorm.from_barcode('CN:00000-0+ NC:00000000')
     for _ in range(200):
-        phi, L = float(rng.uniform(0, 3)), int(rng.integers(2, 25)); eps, eu = float(rng.choice([0, 0.1, 0.5, 1])), float(rng.random())
+        phi, L = float(rng.uniform(0, 3)), int(rng.integers(2, 25)); eps, eu = float(rng.choice([0, 0.1, 0.5, 0.9])), float(rng.random())
         w = rng.random((1, L)); w /= w.sum()
-        R = E.TransitionRates(norm, E.Noise(eps, eu, 1 - eu))(E.Population([E.PhiDisc(phi)], rho=[1.0]), w)
+        R = E.TransitionRates(norm, E.Noise.from_old(eps, eu, 1 - eu))(E.Population([E.PhiDisc(phi)], rho=[1.0]), w)
         g, f = phi_rates_notes(w[0, 0], phi, eps, eu, 1 - eu, L)
         assert np.abs(R.g[0, 1:L + 1] - g).max() < 1e-12 and np.abs(R.f[0, 1:L] - f).max() < 1e-12
 
@@ -252,12 +253,12 @@ def phi1_gamma(eps, eu, ed):
     pi = np.concatenate([[pi0], pi0 * terms(pi0)])
     return pi0, pi, (pi * np.arange(len(pi))).sum()
 
-@pytest.mark.parametrize('eps, eu', [(0.1, 0.4), (0.1, 0.2), (0.3, 0.5), (0.5, 0.1), (1.0, 0.3)])
+@pytest.mark.parametrize('eps, eu', [(0.1, 0.4), (0.1, 0.2), (0.3, 0.5), (0.5, 0.1), (0.9, 0.3)])
 def test_phi1_gamma_solution(eps, eu):
     pi0, pi, mean = phi1_gamma(eps, eu, 1 - eu)
     if (eps, eu) == (0.1, 0.4):
         assert abs(pi0 - 0.2555) < 5e-5 and abs(mean - 1.889) < 5e-4          # numbers quoted in the notes
-    pop, norm, noise = E.Population([E.PhiDisc(1.0)], rho=[1.0]), E.ScoringNorm.from_barcode('CN:00000-0+ NC:00000000'), E.Noise(eps, eu, 1 - eu)
+    pop, norm, noise = E.Population([E.PhiDisc(1.0)], rho=[1.0]), E.ScoringNorm.from_barcode('CN:00000-0+ NC:00000000'), E.Noise.from_old(eps, eu, 1 - eu)
     w1 = solver(norm, noise, **STEP1)(pop, pi[None, :300]).w                    # gamma solution is invariant under one engine step
     assert np.abs(w1[0, :300] - pi[:300]).max() < 1e-13
     res = solver(norm, noise, tol=1e-10, max_iter=4000)(pop, np.full((1, 2), 0.5))
@@ -266,7 +267,7 @@ def test_phi1_gamma_solution(eps, eu):
 def test_phi0_is_discriminators():
     rng = np.random.default_rng(9)
     for _ in range(50):
-        norm = E.ScoringNorm.from_barcode(rand_barcode(rng, 2)); noise = E.Noise(float(rng.choice([0, 0.2, 1])), 0.3, 0.7)
+        norm = E.ScoringNorm.from_barcode(rand_barcode(rng, 2)); noise = E.Noise.from_old(float(rng.choice([0, 0.2, 0.9])), 0.3, 0.7)
         w = rng.random((2, 9)); w /= w.sum(1, keepdims=True)
         R = [E.TransitionRates(norm, noise)(E.Population([a, E.Defectors()], rho=[0.4, 0.6]), w) for a in (E.PhiDisc(0), E.Discriminators())]
         assert all(np.abs(getattr(R[0], k) - getattr(R[1], k)).max() < 1e-15 for k in 'gfGF')
@@ -276,7 +277,7 @@ def class_rates(strat, norm, noise, tau, m):
     eps, eu, ed = noise; reps = [0, 1] if tau is None else [0, 1, tau]; u, d = [], []
     for j in reps:
         G, F = np.sum([np.array(im.pair([strat], norm, 0, j, 0, l)) * mc for mc, l in zip(m, reps)], axis=0)
-        u.append((1 - eps) * G + eps * eu); d.append((1 - eps) * F + eps * ed)
+        u.append(G + eps * eu / (1 - eps)); d.append(F + eps * ed / (1 - eps))
     return np.array(u), np.array([0.0] + d[1:])
 
 def segment_pi(u, d, tau):
@@ -292,7 +293,7 @@ def segment_pi(u, d, tau):
 def test_ternary_class_based_single_strategy_three_segments():
     rng = np.random.default_rng(10); n_checked = 0
     for _ in range(60):
-        tau = int(rng.choice(TAUS)); eu = float(rng.uniform(0.05, 0.5)); noise = (float(rng.choice([0.2, 0.5, 1.0])), eu, 1 - eu)
+        tau = int(rng.choice(TAUS)); eu = float(rng.uniform(0.05, 0.5)); noise = (float(rng.choice([0.2, 0.5, 0.9])), eu, 1 - eu)
         spec = dict(norm=(rand_barcode(rng, 3), tau, False), strats=[('ter', rand_table(rng, 3, 0.5), tau)], rho=[1.0], noise=noise)
         s, nm = mine(spec)
         def resid(m):
@@ -313,7 +314,7 @@ def test_ternary_class_based_single_strategy_three_segments():
 # ------------------------------------------------------------------ eps = 0
 def test_eps_zero_flags():
     norm = lambda c: E.ScoringNorm.from_barcode(c)
-    w0 = np.array([[0.5, 0.3, 0.2]]); noise0 = E.Noise(0.0, 0.5, 0.5)
+    w0 = np.array([[0.5, 0.3, 0.2]]); noise0 = E.Noise.from_old(0.0, 0.5, 0.5)
     # G > 0 = F: scores spread upward for ever
     up_only = solver(norm('CN:0000000+ NC:00000000'), noise0, tol=1e-10, max_iter=300)(E.Population([E.Discriminators()]), w0)
     assert up_only.drifting.all() and not up_only.converged

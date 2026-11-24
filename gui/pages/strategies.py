@@ -298,10 +298,9 @@ def params_from_experiment(experiment):
     return {
         "scores": merged_scores(experiment["scores"]),
         "norm": experiment["norm"],
-        "noise": {k: fmt(number(experiment["noise"][k])) for k in ("eps", "eps_up", "eps_down")},
+        "noise": {k: fmt(v) for k, v in spec.noise_values(experiment).items()},
         "interactions": {"p_can": fmt(number(experiment.get("p_can", 0.5))), "benefit": fmt(number(experiment["benefit"])),
                          "cost": fmt(number(experiment["cost"]))},
         "advanced": {**{k: fmt(number(experiment[k])) for k in ("max_iter", "tol", "resolution")},
-                     "full_steps": bool(experiment.get("full_steps", False)),
-                     "max_score": fmt(number(experiment["max_score"])) if experiment.get("max_score") else ""},
+                     "full_steps": bool(experiment.get("full_steps", False))},
     }

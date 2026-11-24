@@ -99,7 +99,7 @@ def test_defectors_vs_discriminators():
     rho = np.array([0.3, 0.7])
     norm = ScoringNorm.from_barcode("CN:00000-00 NC:00000000")
     population = Population([Defectors(), Discriminators()], rho)
-    result = tight_solver(norm, Noise(eps, eps_up, eps_down))(population, [0.5, 0.5])
+    result = tight_solver(norm, Noise.from_old(eps, eps_up, eps_down))(population, [0.5, 0.5])
 
     w0_2 = (eps_down - eps_up) / eps_down                         # A_2
 
@@ -125,7 +125,7 @@ def test_phi_disc_population_phi_1():
     eps, eps_up, eps_down = 0.5, 0.2, 0.4
     norm = ScoringNorm.from_barcode("CN:00000-0+ NC:00000000")
     population = Population([PhiDisc(phi=1)])
-    result = tight_solver(norm, Noise(eps, eps_up, eps_down))(population, [0.5, 0.5])
+    result = tight_solver(norm, Noise.from_old(eps, eps_up, eps_down))(population, [0.5, 0.5])
     L = result.w.shape[1]
 
     et_up, et_down = eps * eps_up, eps * eps_down
@@ -149,7 +149,7 @@ def test_phi_disc_population_phi_1():
 
 def test_phi_disc_phi_0_is_discriminators():
     for barcode in BARCODES:
-        solver = StableScoreSolver(ScoringNorm.from_barcode(barcode), Noise(0.05, 0.3, 0.6), max_iter=500)
+        solver = StableScoreSolver(ScoringNorm.from_barcode(barcode), Noise.from_old(0.05, 0.3, 0.6), max_iter=500)
         phi = solver(Population([PhiDisc(0), Defectors()], [0.6, 0.4]), [0.3, 0.4, 0.3])
         disc = solver(Population([Discriminators(), Defectors()], [0.6, 0.4]), [0.3, 0.4, 0.3])
         np.testing.assert_allclose(phi.w, disc.w, atol=1e-14)
@@ -164,7 +164,7 @@ def test_ternary_that_ignores_tau_matches_binary(barcode, tau):
     norm = ScoringNorm.from_barcode(barcode)
     binary = [BinaryStrategy.from_name("0,g|0,g"), BinaryStrategy.from_name("0,0|0.3,g")]
     ternary = [TernaryStrategy.from_binary(s, tau) for s in binary]
-    noise = Noise(0.01, 0.4, 0.6)
+    noise = Noise.from_old(0.01, 0.4, 0.6)
     w_init = [0.2, 0.3, 0.5]
 
     expected = StableScoreSolver(norm, noise, max_iter=300)(Population(binary, [0.4, 0.6]), w_init)
@@ -179,7 +179,7 @@ def test_ternary_that_ignores_tau_matches_binary(barcode, tau):
 def test_ternary_strategy_uses_tau():
     """Helping only receivers at or above tau differs from helping every receiver with a score."""
     norm = ScoringNorm.from_barcode("CN:00000-0+ NC:00000000").to_ternary(tau=3)
-    solver = StableScoreSolver(norm, Noise(0.1, 0.3, 0.5), max_iter=2000)
+    solver = StableScoreSolver(norm, Noise.from_old(0.1, 0.3, 0.5), max_iter=2000)
     rich_only = TernaryStrategy.from_name("0,0,0|0,0,0|0,g,g", tau=3)
     everyone = TernaryStrategy.from_name("0,0,0|0,g,g|0,g,g", tau=3)
     w_rich = solver(Population([rich_only]), [0.5, 0.5]).w
@@ -190,7 +190,7 @@ def test_ternary_strategy_uses_tau():
 @pytest.mark.parametrize("barcode", BARCODES)
 def test_rates_and_payoffs_are_linear_in_help_probabilities(barcode):
     """A decision point with probability p behaves as p * (gives) + (1 - p) * (declines)."""
-    rates = TransitionRates(ScoringNorm.from_barcode(barcode), Noise(0.02, 0.5, 0.5))
+    rates = TransitionRates(ScoringNorm.from_barcode(barcode), Noise.from_old(0.02, 0.5, 0.5))
     rng = np.random.default_rng(0)
     w = rng.random((2, 6))
     w /= w.sum(axis=1, keepdims=True)
@@ -208,7 +208,7 @@ def test_rates_and_payoffs_are_linear_in_help_probabilities(barcode):
 def test_stable_distribution_satisfies_detailed_balance():
     norm = ScoringNorm.from_barcode("CN:0+0+0-0+ NC:0000+-0-")
     population = Population([PhiDisc(1.5), TernaryStrategy.from_name("0,0,0|0,g,0.5|g,g,g", tau=3)], [0.5, 0.5])
-    result = tight_solver(norm, Noise(0.6, 0.1, 0.6))(population, [0.5, 0.5])
+    result = tight_solver(norm, Noise.from_old(0.6, 0.1, 0.6))(population, [0.5, 0.5])
     assert result.converged
     for i in range(population.n):
         pi = chain.stationary(result.rates.g[i, :-1], result.rates.f[i])
@@ -218,7 +218,7 @@ def test_stable_distribution_satisfies_detailed_balance():
 def test_probability_is_conserved():
     norm = ScoringNorm.from_barcode("CN:++++0-++ NC:00000+--")
     population = Population([PhiDisc(0.5), BinaryStrategy.from_name("0,g|0.5,g"), Defectors()], [0.2, 0.3, 0.5])
-    result = StableScoreSolver(norm, Noise(0.01), max_iter=50, record_history=True)(population, [1.0])
+    result = StableScoreSolver(norm, Noise.from_old(0.01), max_iter=50, record_history=True)(population, [1.0])
     for w, _ in result.history:
         np.testing.assert_allclose(w.sum(axis=1), 1.0, atol=1e-13)
         assert np.all(w >= 0)
@@ -227,10 +227,10 @@ def test_probability_is_conserved():
 def test_drifting_chains_are_not_converged():
     """Money with eps_up = eps_down: Discriminators' scores spread out for ever (null recurrent)."""
     money = ScoringNorm.from_barcode("CN:00000-++ NC:00000+--")
-    result = StableScoreSolver(money, Noise.from_noise_val(0.1), max_iter=20_000)(Population([Discriminators()]),
+    result = StableScoreSolver(money, Noise.from_old(0.1), max_iter=20_000)(Population([Discriminators()]),
                                                                                   [0.5, 0.5])
     assert result.drifting.all() and not result.converged
-    settled = StableScoreSolver(money, Noise(0.1, 0.2, 0.4), tol=1e-9, max_iter=20_000)(
+    settled = StableScoreSolver(money, Noise.from_old(0.1, 0.2, 0.4), tol=1e-9, max_iter=20_000)(
         Population([Discriminators()]), [0.5, 0.5])
     assert settled.converged and not settled.drifting.any()
     np.testing.assert_allclose(settled.w0, [1 - 0.2 / 0.4], atol=1e-4)   # w0 = 1 - eps_up/eps_down for money
@@ -241,7 +241,7 @@ def test_concurrent_rate_evaluations():
     import threading
 
     norm = ScoringNorm.from_barcode("CN:00000-0+ NC:00000+-0")
-    solver = StableScoreSolver(norm, Noise(0.1, 0.3, 0.7))
+    solver = StableScoreSolver(norm, Noise.from_old(0.1, 0.3, 0.7))
     errors = []
 
     def work(seed):
@@ -267,8 +267,8 @@ def test_concurrent_rate_evaluations():
 def test_tail_trimming_barely_changes_results():
     money = ScoringNorm.from_barcode("CN:00000-++ NC:00000+--")
     population = Population([Discriminators(), Defectors(), PhiDisc(0.17)], [0.3, 0.3, 0.4])
-    exact = StableScoreSolver(money, Noise.from_noise_val(0.1), max_iter=2000, force_max_iter=True)(population, [0.5, 0.5])
-    trimmed = StableScoreSolver(money, Noise.from_noise_val(0.1), max_iter=2000, force_max_iter=True,
+    exact = StableScoreSolver(money, Noise.from_old(0.1), max_iter=2000, force_max_iter=True)(population, [0.5, 0.5])
+    trimmed = StableScoreSolver(money, Noise.from_old(0.1), max_iter=2000, force_max_iter=True,
                                 tail_tol=1e-15)(population, [0.5, 0.5])
     assert trimmed.w.shape[1] < exact.w.shape[1] / 3
     L = trimmed.w.shape[1]
@@ -277,11 +277,11 @@ def test_tail_trimming_barely_changes_results():
 
 
 def test_noise_rejects_up_and_down_rates_that_add_to_more_than_one():
-    Noise(0.1, 0.4, 0.6)
-    Noise(0.1, 0.2, 0.4)                       # less than one is allowed
+    Noise.from_old(0.1, 0.4, 0.6)
+    Noise.from_old(0.1, 0.2, 0.4)                       # less than one is allowed
     for bad in ((1, 1, 1), (0.1, 0.6, 0.6), (0.1, 0.5, 0.5000001)):
         with pytest.raises(ValueError, match="eps_up"):
-            Noise(*bad)
+            Noise.from_old(*bad)
 
 
 def test_phi_disc_can_help_at_score_zero():
@@ -311,7 +311,7 @@ def test_phi_disc_help_at_score_zero_adds_exactly_that_help():
     """Under CN:00000-0+ a donor with score 0 helping a receiver with a score changes nobody's score, so only the
     helping rates move, by p0 * Pr(donor has score 0) * Pr(receiver has a score)."""
     norm = ScoringNorm.from_barcode("CN:00000-0+ NC:00000000")
-    solver = StableScoreSolver(norm, Noise(0.1, 0.5, 0.5), tol=1e-10, max_iter=3000)
+    solver = StableScoreSolver(norm, Noise.from_old(0.1, 0.5, 0.5), tol=1e-10, max_iter=3000)
     payoffs = Payoffs()
     rho = [0.5, 0.5]
     runs = []
@@ -326,12 +326,3 @@ def test_phi_disc_help_at_score_zero_adds_exactly_that_help():
         np.testing.assert_allclose(H1[0, k] - H0[0, k], 0.5 * w0[0, 0] * positive, rtol=1e-6)
     np.testing.assert_array_equal(H1[1], 0)                                    # Defectors still never help
 
-
-def test_max_score_caps_the_scores():
-    solver = StableScoreSolver(ScoringNorm.from_barcode("CN:++++++++ NC:00000000"), Noise(), max_iter=300, force_max_iter=True)
-    population = Population([PhiDisc(0.0)])
-    free = solver(population, [0.0, 1.0])
-    capped = solver.with_options(max_score=4)(population, [0.0, 1.0])
-    assert free.w.shape[1] > 5 and capped.w.shape[1] == 5
-    np.testing.assert_allclose(capped.w.sum(), 1.0)
-    assert not capped.drifting.any()

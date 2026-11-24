@@ -6,7 +6,9 @@ from .rates import ROLE_FACTOR, _Cache
 
 
 class Payoffs:
-    def __init__(self, benefit=2.0, cost=1.0, role_factor=ROLE_FACTOR):
+    def __init__(self, benefit=2.0, cost=1.0, role_factor=ROLE_FACTOR, epsilon=0.0):
+        """epsilon: probability that a donor's action is the opposite of the intended one (as in Noise)."""
+        self.epsilon = epsilon
         self.benefit = benefit
         self.cost = cost
         self.role_factor = role_factor
@@ -15,6 +17,7 @@ class Payoffs:
     def help_probabilities(self, population, w):
         """H[i, k] = Pr(a Can of strategy i helps a Need of strategy k)."""
         _, onehot, help_ = self._cache.get(population.strategies).at(w.shape[1])
+        help_ = (1 - self.epsilon) * help_ + self.epsilon * (1 - help_)
         return np.einsum("kc,icd,id->ik", w @ onehot, help_, w)
 
     def __call__(self, population, w):

@@ -4,7 +4,7 @@ from engine import (Defectors, Discriminators, Noise, Payoffs, ReplicatorDynamic
 
 np.set_printoptions(precision=4, suppress=True)
 norm = ScoringNorm.from_barcode("CN:00000-00 NC:00000000")      # lose a score for declining a receiver with a score
-solver = StableScoreSolver(norm, Noise(eps=0.01), tol=1e-8, max_iter=2000)
+solver = StableScoreSolver(norm, Noise.from_old(0.01), tol=1e-8, max_iter=2000)
 dynamics = ReplicatorDynamics(solver, Payoffs(), dt=20.0)
 traj = dynamics.run([Discriminators(), Defectors()], rho=[0.3, 0.7], w_init=[0.5, 0.5], n_steps=5)
 print(traj.t)                                    # stopped at t = 60: Defectors have gone extinct

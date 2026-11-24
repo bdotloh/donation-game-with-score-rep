@@ -54,7 +54,7 @@ def test_lifted_to_ternary():
 
 @pytest.mark.parametrize("named", LEADING_EIGHT, ids=lambda n: n.label)
 def test_the_cooperative_strategy_is_an_ess_with_nearly_full_payoff(named):
-    solver = StableScoreSolver(ScoringNorm.from_barcode(named.barcode), Noise.from_noise_val(0.01), max_iter=100)
+    solver = StableScoreSolver(ScoringNorm.from_barcode(named.barcode), Noise.from_old(0.01), max_iter=100)
     strategies = all_binary_strategies()
     ess = [s.name for s in ESSFinder(solver, Payoffs(), rho=0.99, fitness_threshold=1e-5)(strategies, strategies, [0.5, 0.5])]
     assert named.strategy in ess

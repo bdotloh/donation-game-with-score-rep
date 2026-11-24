@@ -42,10 +42,21 @@ def test_score_distribution():
 
 
 def test_noise():
-    assert validation.noise("0.1", "0.3", "0.7")[1] == ""
-    assert validation.noise("1.5", "0.5", "0.5")[1]
-    assert validation.noise("0.1", "0.3", "0.6")[1]
-    assert validation.noise("0.1", "0.333", "0.667")[0]["eps_up"] == pytest.approx(0.333)
+    assert validation.noise("0.05", "0.07", "0.1")[1] == ""
+    assert validation.noise("3", "7", "0")[1] == ""                      # rates, not probabilities
+    assert validation.noise("-0.1", "0.5", "0")[1]
+    assert validation.noise("0.1", "0.5", "1.5")[1]
+    assert validation.noise("0.1", "x", "0")[1]
+    assert validation.noise("0.1", "0.333", "0.2")[0] == {"eta_up": 0.1, "eta_down": 0.333, "epsilon": 0.2}
+
+
+def test_old_settings_are_converted_to_additive_rates():
+    experiment, _ = _experiment()
+    old = {**experiment, "noise": {"eps": 0.1, "eps_up": 0.49, "eps_down": 0.51}, "max_score": 5}
+    values = spec.noise_values(old)
+    assert values["eta_up"] == pytest.approx(0.1 * 0.49 / 0.9) and values["eta_down"] == pytest.approx(0.1 * 0.51 / 0.9)
+    assert values["epsilon"] == 0 and spec.check(old) == ""
+    assert not hasattr(spec.build(old)["dynamics"].solver, "max_score")             # scores have no cap
 
 
 def test_presets():
@@ -63,7 +74,7 @@ def _experiment():
     cn, nc = "00000-00", "00000000"
     return experiment_from_inputs(
         strategies, [{"score": 0, "mass": 0.5}, {"score": 1, "mass": 0.5}],
-        "binary", None, list(cn), list(nc), "0.1", "0.4", "0.6", "0.5", "2", "1", {"max_iter": "200", "tol": "1e-6", "resolution": "4", "full_steps": True})
+        "binary", None, list(cn), list(nc), "0.04", "0.06", "0", "0.5", "2", "1", {"max_iter": "200", "tol": "1e-6", "resolution": "4", "full_steps": True})
 
 
 def test_experiment_round_trip():
@@ -79,29 +90,26 @@ def test_experiment_round_trip():
 def test_experiment_errors():
     strategies = [spec.preset_strategy("AllD-Disc"), spec.preset_strategy("Defectors")]
     args = [[{"score": 0, "mass": 1.0}], "binary", None, list("00000-00"), list("00000000"),
-            "0.1", "0.4", "0.6", "0.5", "2", "1", {"max_iter": "200", "tol": "1e-6", "resolution": "4", "full_steps": True}]
+            "0.04", "0.06", "0", "0.5", "2", "1", {"max_iter": "200", "tol": "1e-6", "resolution": "4", "full_steps": True}]
     assert experiment_from_inputs(strategies, *args)[1] == ""
     bad = list(args)
-    bad[6] = "0.3"
-    assert "Noise" in experiment_from_inputs(strategies, *bad)[1]
+    bad[7] = "1.5"
+    assert "Token rates" in experiment_from_inputs(strategies, *bad)[1]
     bad = list(args)
     bad[3] = list("-0000000")
     assert "Norm" in experiment_from_inputs(strategies, *bad)[1]
     assert "2 or 3" in experiment_from_inputs(strategies[:1], *args)[1]
 
 
-def test_max_iter_and_max_score_inputs():
+def test_max_iter_input():
     strategies = [spec.preset_strategy("AllD-Disc"), spec.preset_strategy("Defectors")]
     args = [[{"score": 0, "mass": 1.0}, {"score": 3, "mass": 1.0}], "binary", None, list("00000-00"), list("00000000"),
-            "0.1", "0.4", "0.6", "0.5", "2", "1", {"max_iter": "200"}]
-    experiment, error = experiment_from_inputs(strategies, *args, "50", "")
+            "0.04", "0.06", "0", "0.5", "2", "1", {"max_iter": "200"}]
+    experiment, error = experiment_from_inputs(strategies, *args, "50")
     assert error == "" and experiment["max_iter"] == 50 and "max_score" not in experiment
-    experiment, error = experiment_from_inputs(strategies, *args, "50", "5")
-    assert error == "" and experiment["max_score"] == 5 and spec.check(experiment) == ""
-    assert spec.build(experiment)["dynamics"].solver.max_score == 5
-    assert "Max score" in experiment_from_inputs(strategies, *args, "50", "2")[1]      # below an initial score
-    assert "Max score" in experiment_from_inputs(strategies, *args, "50", "x")[1]
-    assert "Max score iterations" in experiment_from_inputs(strategies, *args, "0", "")[1]
+    assert experiment["noise"] == {"eta_up": 0.04, "eta_down": 0.06, "epsilon": 0.0} and spec.check(experiment) == ""
+    assert "Max score iterations" in experiment_from_inputs(strategies, *args, "0")[1]
+    assert "Token rates" in experiment_from_inputs(strategies, *[*args[:5], "-1", *args[6:]], "50")[1]
 
 
 @pytest.mark.parametrize("strategy", [BinaryStrategy.from_name("0,0|0,g"), TernaryStrategy.from_name(
@@ -275,7 +283,7 @@ def _values(experiment):
     """The parameters page's inputs, in FORM order after the strategies, for an experiment."""
     norm = experiment["norm"]
     return ([{"score": 0, "mass": 0.5}, {"score": 1, "mass": 0.5}], norm["type"],
-            norm["tau"], list(norm["CN"]), list(norm["NC"]), "0.1", "0.4", "0.6", "0.5", "2", "1", {"max_iter": "200", "tol": "1e-6", "resolution": "4", "full_steps": True})
+            norm["tau"], list(norm["CN"]), list(norm["NC"]), "0.04", "0.06", "0", "0.5", "2", "1", {"max_iter": "200", "tol": "1e-6", "resolution": "4", "full_steps": True})
 
 
 def _text(component):
@@ -445,7 +453,7 @@ def test_the_solver_settings_are_not_on_the_parameters_page_but_are_kept():
 
     strategies = [spec.preset_strategy("AllD-Disc"), spec.preset_strategy("Defectors")]
     args = [[{"score": 0, "mass": 1.0}], "binary", None, list("00000-00"), list("00000000"),
-            "0.1", "0.4", "0.6", "0.5", "2", "1"]
+            "0.04", "0.06", "0", "0.5", "2", "1"]
     # With none given the defaults are used ...
     experiment, error = experiment_from_inputs(strategies, *args)
     assert error == ""

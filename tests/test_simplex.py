@@ -111,7 +111,7 @@ def test_precomputed_grid_is_reused():
 # ---------------------------------------------------------------- with the engine
 
 
-def _field(norm="CN:00000-00 NC:00000000", noise=Noise(0.2, 0.1, 0.3), strategies=None, **solver_options):
+def _field(norm="CN:00000-00 NC:00000000", noise=Noise.from_old(0.2, 0.1, 0.3), strategies=None, **solver_options):
     solver = StableScoreSolver(ScoringNorm.from_barcode(norm), noise, **{"tol": 1e-8, **solver_options})
     dynamics = ReplicatorDynamics(solver, Payoffs())
     strategies = strategies or [Discriminators(), Defectors()]
@@ -143,7 +143,7 @@ def test_evaluate_many_parallel_matches_serial():
 
 
 def test_converged_flag():
-    field, _, _ = _field(norm="CN:00000-0+ NC:00000000", noise=Noise(0.1, 0.2, 0.4), max_iter=50)
+    field, _, _ = _field(norm="CN:00000-0+ NC:00000000", noise=Noise.from_old(0.1, 0.2, 0.4), max_iter=50)
     assert not field.evaluate([0.5, 0.5]).converged
 
 

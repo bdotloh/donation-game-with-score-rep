@@ -4,8 +4,9 @@ For strategy i, g_j^(i) is the rate from score j-1 to j, and f_j^(i) the rate
 from j to j-1. Interactions alone give G_j^(i) and F_j^(i): each individual can
 help (is a Can) with probability q and is in need otherwise, and a Can meets a
 Need, so a given ordered role assignment has probability q(1 - q) (the role
-factor; 1/4 for q = 1/2, as in helper_funcs.jl). Noise then gives
-g = (1 - eps) G + eps eps_up and f = (1 - eps) F + eps eps_down.
+factor; 1/4 for q = 1/2, as in helper_funcs.jl). The rates of the exogenous token changes are added:
+g = G + eta_up(j) and f = F + eta_down(j), f_0 = 0 (noise.py); epsilon, the chance of a wrong action, acts
+inside G and F through the help probabilities.
 
 Arrays use the document's indices: G[i, j] = G_j^(i) for j = 1..L and
 F[i, j] = F_j^(i) for j = 1..L-1, where L is the number of scores tracked.
@@ -121,6 +122,7 @@ class TransitionRates:
         n, L = w.shape
         structure = self._cache.get(population.strategies)
         classes, onehot, help_ = structure.at(L)
+        help_ = self.noise.act(help_)
         decline_cn, change_cn, decline_nc, change_nc, norm_onehot = self._rule_arrays(structure, L)
 
         rho = population.rho
@@ -144,10 +146,9 @@ class TransitionRates:
         F = rates[1]
         F[:, 0] = 0.0
 
-        eps, eps_up, eps_down = self.noise.eps, self.noise.eps_up, self.noise.eps_down
-        g = (1 - eps) * G + eps * eps_up
-        f = (1 - eps) * F + eps * eps_down
-        g[:, 0] = 0.0
+        g = G.copy()
+        g[:, 1:] += self.noise.up(L)             # g[:, j] is the rate from j - 1, so eta_up(j - 1)
+        f = F + self.noise.down(L)
         f[:, 0] = 0.0
         return Rates(G=G, F=F, g=g, f=f)
 

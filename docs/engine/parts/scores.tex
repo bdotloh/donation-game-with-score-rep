@@ -43,7 +43,7 @@ q & float in $(0,1)$ & the probability that an individual can help. \code{ValueE
 
 \whatit
 Given a population and its current score distributions, computes the rates at which a score of each strategy moves up and
-down: $G,F$ from interactions alone, and $g,f$ with noise. Returns them in a \code{Rates} record.
+down: $G,F$ from interactions alone, and $g,f$ with the token rates added. Returns them in a \code{Rates} record.
 
 \howit
 Take an individual of strategy $i$ with score $s$. Let $x(\cdot)$ be a score's class under the norm, and let
@@ -66,15 +66,15 @@ The rates are the role factor times the sums:
  G^{(i)}_{s+1}=\kappa\,(U^{\mathrm{can}}_s+U^{\mathrm{need}}_s),\qquad
  F^{(i)}_{s}=\kappa\,(D^{\mathrm{can}}_s+D^{\mathrm{need}}_s),
 \]
-and with noise $g=(1-\varepsilon)G+\varepsilon\varepsilon_\uparrow$, $f=(1-\varepsilon)F+\varepsilon\varepsilon_\downarrow$
-(with $g_0=f_0=0$). The code does not loop over scores and classes: it works on the coarsest partition of the scores that
+and with the token rates $g=G+\eta_\uparrow(j)$, $f=F+\eta_\downarrow(j)$ (with $f_0=0$); action errors $\varepsilon$ change the help
+probabilities inside $G$ and $F$. The code does not loop over scores and classes: it works on the coarsest partition of the scores that
 refines the norm's classes and every strategy's receiver classes, so each call is a few array operations whatever the
 strategies are, and the class tables are cached per set of strategies.
 
 \paramsh
 \begin{params}
 norm & \code{ScoringNorm} & the update rule.\\
-noise & \code{Noise} & the noise.\\
+noise & \code{Noise} & token rates $\eta$ and action errors $\varepsilon$.\\
 role\_factor & float, \code{0.25} & $\kappa$ (see \code{role\_factor(q)}).\\
 population & \code{Population} & the call \code{rates(population, w)}.\\
 w & array $(n,L)$ & the current score distributions; the top score should be empty (see \code{chain.extend}).\\
@@ -142,14 +142,14 @@ The record keeps \code{w} (the result), \code{w\_prev} (the distributions the la
 \paramsh
 \begin{params}
 norm & \code{ScoringNorm} & the update rule.\\
-noise & \code{Noise}, default \code{Noise()} & the noise.\\
+noise & \code{Noise}, default \code{Noise()} & token rates $\eta$ and action errors $\varepsilon$.\\
 tol & float, \code{1e-5} & converged when the largest change in one step is at most this.\\
 max\_iter & int, \code{10000} & the most steps.\\
 stop\_when\_transient & bool, \code{True} & stop when every chain has left its initial scores.\\
 force\_max\_iter & bool, \code{False} & never stop early: always take \code{max\_iter} steps.\\
 record\_history & bool, \code{False} & keep \code{(w, rates)} after every step in \code{history}.\\
 role\_factor & float, \code{0.25} & $\kappa$.\\
-tail\_tol & float, \code{0.0} & if positive, drop top scores with mass below it (keeps long runs short).\\
+tail\_tol & float, \code{0.0} & if positive, drop top scores with mass below it (keeps long runs short; a numerical cutoff, not a cap on the score).\\
 population, w\_init & & the call \code{solver(population, w\_init)}.\\
 \end{params}
 \code{solver.with\_options(**options)} returns a copy with \code{tol}, \code{max\_iter}, \dots{} changed (not the norm, noise

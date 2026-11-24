@@ -103,7 +103,7 @@ def engine_w(strategies, rho, norm, tau, eps, eps_up, eps_down, w_init, t, **sol
             objs.append(BinaryStrategy.from_name(spec))
         else:
             objs.append(TernaryStrategy.from_name(spec, tau))
-    solver = StableScoreSolver(ScoringNorm.from_barcode(norm, tau=tau), Noise(eps, eps_up, eps_down), tol=1e-5,
+    solver = StableScoreSolver(ScoringNorm.from_barcode(norm, tau=tau), Noise.from_old(eps, eps_up, eps_down), tol=1e-5,
                                max_iter=t, force_max_iter=True, **solver_kw)
     return np.asarray(solver(Population(objs, rho=list(rho)), np.tile(np.asarray(w_init, float), (len(objs), 1))).w)
 
@@ -279,7 +279,7 @@ def test_lifted_binary_norm_gives_the_binary_distribution():
         res = []
         for norm, strategies in ((binary, [BinaryStrategy.from_name("0,0|0,0"), BinaryStrategy.from_name("0,0|0,g")]),
                                  (lifted, [BinaryStrategy.from_name("0,0|0,0"), BinaryStrategy.from_name("0,0|0,g")])):
-            solver = StableScoreSolver(norm, Noise(*NOISE_5050), max_iter=60, force_max_iter=True)
+            solver = StableScoreSolver(norm, Noise.from_old(*NOISE_5050), max_iter=60, force_max_iter=True)
             res.append(np.asarray(solver(Population(strategies, rho=[0.5, 0.5]), np.tile([0.5, 0.5], (2, 1))).w))
         L = min(res[0].shape[1], res[1].shape[1])
         assert np.abs(res[0][:, :L] - res[1][:, :L]).max() < 1e-12

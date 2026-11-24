@@ -4,7 +4,7 @@ import numpy as np
 from engine import *
 
 def rates(norm, strats, rho, w, eps=0.0, up=.5, down=.5):
-    tr = TransitionRates(norm, Noise(eps, up, down))
+    tr = TransitionRates(norm, Noise.from_old(eps, up, down))
     return tr(Population(strats, rho=rho), np.array(w, float))
 
 def code(n, entries):  # entries: {(need,act,can): '+'/'-'}; 18-char string

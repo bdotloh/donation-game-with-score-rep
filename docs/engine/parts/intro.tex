@@ -18,7 +18,7 @@ $i$ has its own score distribution $w^{(i)}_j$ = the fraction of its individuals
 
 \paragraph{Score chains.} Seen from one individual of strategy $i$, the score is a birth--death chain on $\{0,1,\dots\}$:
 it moves up from $j-1$ to $j$ at rate $g^{(i)}_j$ and down from $j$ to $j-1$ at rate $f^{(i)}_j$. The rates come from
-the norm, the strategies, who is in the population and, through noise $\varepsilon$, from random score changes. They
+the norm, the strategies, who is in the population and, through the token rates $\eta$, from score changes that are not interactions. They
 depend on the score distributions of \emph{all} strategies, so the $n$ chains are run together until the distributions
 stop changing (the \emph{stable} score distributions).
 
@@ -41,8 +41,8 @@ $\rho_i$ & \code{rho[i]} & frequency of strategy $i$\\
 $w^{(i)}_j$ & \code{w[i, j]} & fraction of strategy $i$ with score $j$ (array of shape $n\times L$)\\
 $\kappa$ & \code{role\_factor} & $q(1-q)$, default $0.25$\\
 $G^{(i)}_j,\;F^{(i)}_j$ & \code{G[i, j]}, \code{F[i, j]} & rate $j-1\to j$ and $j\to j-1$ from interactions alone\\
-$g^{(i)}_j,\;f^{(i)}_j$ & \code{g[i, j]}, \code{f[i, j]} & the same with noise\\
-$\varepsilon,\varepsilon_\uparrow,\varepsilon_\downarrow$ & \code{eps}, \code{eps\_up}, \code{eps\_down} & noise\\
+$g^{(i)}_j,\;f^{(i)}_j$ & \code{g[i, j]}, \code{f[i, j]} & the same with the token rates added\\
+$\eta_\uparrow,\eta_\downarrow,\varepsilon$ & \code{eta\_up}, \code{eta\_down}, \code{epsilon} & token rates, action errors\\
 $h_i(c,d)$ & \code{donor\_help(n)[c, d]} & probability that a donor of strategy $i$ with score $d$ helps a receiver of class $c$\\
 $H_{ik}$ & \code{H[i, k]} & probability that a Can of $i$ helps a Need of $k$\\
 $A_{ik}$ & \code{A[i, k]} & payoff matrix, $\pi=A\rho$\\
@@ -61,7 +61,7 @@ rate \emph{out of} score $j$ (also $j\ge1$). For $L$ scores, \code{g} has $L+1$ 
 \begin{center}
 \begin{tabularx}{\linewidth}{@{}lXl@{}}\toprule
 chapter & pieces (module) & builds on\\\midrule
-\ref{ch:elements} Elements & score partitions (\code{partitions}), strategies (\code{strategies}), scoring norms and noise (\code{norms}, \code{known\_norms}, \code{noise}) & ---\\
+\ref{ch:elements} Elements & score partitions (\code{partitions}), strategies (\code{strategies}), scoring norms and token rates (\code{norms}, \code{known\_norms}, \code{noise}) & ---\\
 \ref{ch:scores} Score dynamics & population (\code{population}), transition rates (\code{rates}), the chain (\code{chain}), stable scores (\code{solver}) & elements\\
 \ref{ch:dynamics} Dynamics & payoffs (\code{payoffs}), replicator dynamics (\code{replicator}), the strategy simplex and rest points (\code{simplex}), ESS (\code{ess}) & score dynamics\\
 \bottomrule

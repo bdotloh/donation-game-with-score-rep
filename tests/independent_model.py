@@ -78,11 +78,12 @@ def kernel_fast(strats, norm, L):
 def rates(K, noise, rho, w):
     """G, F, up, down, all (n, L): G[i,j] = Pr(dS=+1 | i,j) (Eq 1), F (Eq 2); up[i,j] = rate j -> j+1,
     down[i,j] = rate j -> j-1 (Eq 3-4; nothing goes down from 0)."""
-    eps, eu, ed = noise
+    eps, eu, ed = noise          # old parameters; the additive rates are the old ones divided by 1 - eps
+    assert eps < 1
     n, L = w.shape
     G = np.einsum('ikjl,k,kl->ij', K[0][:, :, :L, :L], np.asarray(rho, float), w)
     F = np.einsum('ikjl,k,kl->ij', K[1][:, :, :L, :L], np.asarray(rho, float), w)
-    up, down = (1 - eps) * G + eps * eu, (1 - eps) * F + eps * ed
+    up, down = G + eps * eu / (1 - eps), F + eps * ed / (1 - eps)
     down[:, 0] = 0.0
     return G, F, up, down
 

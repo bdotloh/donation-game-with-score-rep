@@ -80,19 +80,16 @@ def score_entry(score, mass):
     return {"score": int(s), "mass": m}, ""
 
 
-def noise(eps, eps_up, eps_down):
-    values = [parse_number(x) for x in (eps, eps_up, eps_down)]
+def noise(eta_up, eta_down, epsilon):
+    values = [parse_number(x) for x in (eta_up, eta_down, epsilon)]
     if any(x is None for x in values):
-        return None, "ε, ε↑ and ε↓ must be numbers."
-    eps, eps_up, eps_down = values
-    if not 0 <= eps <= 1:
+        return None, "η↑, η↓ and ε must be numbers."
+    eta_up, eta_down, epsilon = values
+    if eta_up < 0 or eta_down < 0:
+        return None, "η↑ and η↓ are rates; they must be 0 or more."
+    if not 0 <= epsilon <= 1:
         return None, "ε must lie between 0 and 1."
-    if not (0 <= eps_up <= 1 and 0 <= eps_down <= 1):
-        return None, "ε↑ and ε↓ must lie between 0 and 1."
-    if abs(eps_up + eps_down - 1) > FRACTION_TOL:
-        return None, f"ε↑ + ε↓ = {eps_up + eps_down:g}; it must be 1."
-    total = eps_up + eps_down
-    return {"eps": eps, "eps_up": eps_up / total, "eps_down": eps_down / total}, ""
+    return {"eta_up": eta_up, "eta_down": eta_down, "epsilon": epsilon}, ""
 
 
 def probability(value):

@@ -103,13 +103,16 @@ print(MONEY.title, MONEY.barcode, MONEY.strategy)
 example("noise", '''
 from engine import Noise
 
-noise = Noise(eps=0.1, eps_up=0.4, eps_down=0.6)
-print(noise)
+noise = Noise(eta_up=0.04, eta_down=lambda j: 0.01 * j, epsilon=0.1)    # the loss rate grows with the score
+print(noise.up(4), noise.down(4))
+print(noise.act(0.0), noise.act(1.0))
+print(Noise.from_old(0.1, 0.49, 0.51))                                  # the old mixture, as additive rates
 try:
-    Noise(eps=0.1, eps_up=0.7, eps_down=0.6)
+    Noise(eta_up=-0.1)
 except ValueError as error:
     print("ValueError:", error)
 ''')
+
 
 # ---------------------------------------------------------------- population and rates
 
@@ -128,7 +131,7 @@ import numpy as np
 from engine import Noise, PhiDisc, Population, ScoringNorm, TransitionRates
 
 norm = ScoringNorm.from_barcode("CN:00000-0+ NC:00000000")
-rates = TransitionRates(norm, Noise(eps=0.1))
+rates = TransitionRates(norm, Noise.from_old(0.1))
 pop = Population([PhiDisc(1)])
 w = np.array([[0.5, 0.3, 0.2, 0.0]])             # score distribution, last score empty
 r = rates(pop, w)
@@ -160,7 +163,7 @@ from engine import Noise, PhiDisc, Population, ScoringNorm, StableScoreSolver
 
 np.set_printoptions(precision=4, suppress=True)
 norm = ScoringNorm.from_barcode("CN:00000-0+ NC:00000000")
-solver = StableScoreSolver(norm, Noise(eps=0.1, eps_up=0.3, eps_down=0.7), tol=1e-10, max_iter=5000)
+solver = StableScoreSolver(norm, Noise.from_old(0.1, 0.3, 0.7), tol=1e-10, max_iter=5000)
 result = solver(Population([PhiDisc(1)]), [0.5, 0.5])
 print(result.converged, result.drifting, result.n_iter)
 print(result.w[0][:6])
@@ -175,7 +178,7 @@ from engine import (Defectors, Noise, Payoffs, PhiDisc, Population, ScoringNorm,
 
 np.set_printoptions(precision=4, suppress=True)
 norm = ScoringNorm.from_barcode("CN:00000-0+ NC:00000000")
-solver = StableScoreSolver(norm, Noise(eps=0.1, eps_up=0.3, eps_down=0.7), tol=1e-10, max_iter=5000)
+solver = StableScoreSolver(norm, Noise.from_old(0.1, 0.3, 0.7), tol=1e-10, max_iter=5000)
 pop = Population([PhiDisc(1), Defectors()], [0.5, 0.5])
 w = solver(pop, [0.5, 0.5]).w
 payoffs = Payoffs(benefit=2, cost=1)
@@ -189,7 +192,7 @@ from engine import (Defectors, Discriminators, Noise, Payoffs, ReplicatorDynamic
 
 np.set_printoptions(precision=4, suppress=True)
 norm = ScoringNorm.from_barcode("CN:00000-00 NC:00000000")      # lose a score for declining a receiver with a score
-solver = StableScoreSolver(norm, Noise(eps=0.01), tol=1e-8, max_iter=2000)
+solver = StableScoreSolver(norm, Noise.from_old(0.01), tol=1e-8, max_iter=2000)
 dynamics = ReplicatorDynamics(solver, Payoffs(), dt=20.0)
 traj = dynamics.run([Discriminators(), Defectors()], rho=[0.3, 0.7], w_init=[0.5, 0.5], n_steps=5)
 print(traj.t)                                    # stopped at t = 60: Defectors have gone extinct
@@ -205,7 +208,7 @@ from engine import (Defectors, Discriminators, Noise, Payoffs, ReplicatorDynamic
 
 np.set_printoptions(precision=4, suppress=True)
 norm = ScoringNorm.from_barcode("CN:00000-00 NC:00000000")
-solver = StableScoreSolver(norm, Noise(eps=0.01), tol=1e-8, max_iter=2000)
+solver = StableScoreSolver(norm, Noise.from_old(0.01), tol=1e-8, max_iter=2000)
 strategies = [Discriminators(), Defectors()]
 field = ReplicatorField(ReplicatorDynamics(solver, Payoffs()), strategies, [0.5, 0.5])
 point = field.evaluate([0.3, 0.7])
@@ -219,7 +222,7 @@ example("ess", '''
 from engine import (ESSFinder, Noise, Payoffs, ScoringNorm, StableScoreSolver, all_binary_strategies)
 
 norm = ScoringNorm.from_barcode("CN:00000-00 NC:00000000")      # lose a score for declining a receiver with a score
-solver = StableScoreSolver(norm, Noise(eps=0.01), tol=1e-5, max_iter=100)
+solver = StableScoreSolver(norm, Noise.from_old(0.01), tol=1e-5, max_iter=100)
 strategies = all_binary_strategies()
 finder = ESSFinder(solver, Payoffs(), rho=0.99)
 ess = finder(strategies, strategies, w_init=[0.5, 0.5])

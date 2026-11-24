@@ -9,6 +9,13 @@ import pytest
 
 from engine import BinaryStrategy, ESSFinder, Noise, Payoffs, Population, ScoringNorm, StableScoreSolver
 
+
+def julia_solver(norm, noise_val, **options):
+    """helper_funcs.jl: rates (1 - NOISE_VAL) trans + NOISE_VAL / 2. As additive rates that is eta = NOISE_VAL / 2 with
+    lambda = (1 - NOISE_VAL) / 4, so the rates are exactly the old ones; Noise.from_old gives the same stationary distributions."""
+    return StableScoreSolver(norm, Noise(eta_up=noise_val / 2, eta_down=noise_val / 2), role_factor=0.25 * (1 - noise_val),
+                             **options)
+
 REFERENCE = Path(__file__).parent / "reference"
 STRATEGIES = [f"{a},{b}|{c},{d}" for a in "0g" for b in "0g" for c in "0g" for d in "0g"]
 
@@ -39,7 +46,7 @@ STABLE_CASES = read_tsv("stable_cases.tsv")
 @pytest.mark.parametrize("case", STABLE_CASES, ids=[str(i) for i in range(len(STABLE_CASES))])
 def test_stable_scores(case):
     norm = ScoringNorm.from_barcode(case["barcode"])
-    solver = StableScoreSolver(norm, Noise.from_noise_val(float(case["noise"])), max_iter=int(case["maxn"]))
+    solver = julia_solver(norm, float(case["noise"]), max_iter=int(case["maxn"]))
     payoffs = Payoffs()
 
     if case["kind"] == "one":
@@ -71,7 +78,7 @@ ESS_SAMPLE = random.Random(0).sample(ESS_ROWS, 60)
 
 
 def find_ess(barcode, noise):
-    solver = StableScoreSolver(ScoringNorm.from_barcode(barcode), Noise.from_noise_val(noise), max_iter=100)
+    solver = julia_solver(ScoringNorm.from_barcode(barcode), noise, max_iter=100)
     finder = ESSFinder(solver, Payoffs(), rho=0.99, fitness_threshold=1e-5)
     strategies = [BinaryStrategy.from_name(s) for s in STRATEGIES]
     return [s.name for s in finder(strategies, strategies, [0.5, 0.5])]

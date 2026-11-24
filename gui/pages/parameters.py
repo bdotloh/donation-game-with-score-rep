@@ -1,4 +1,4 @@
-"""Page 2: initial scores, scoring norm, noise and the rest."""
+"""Page 2: initial scores, scoring norm, token rates and action errors, and the rest."""
 
 import json
 
@@ -18,15 +18,14 @@ FORM = [
     ("p-norm-tau", "value"),
     ({"type": "p-bit", "rule": "CN", "index": ALL}, "value"),
     ({"type": "p-bit", "rule": "NC", "index": ALL}, "value"),
-    ("p-eps", "value"),
-    ("p-eps-up", "value"),
-    ("p-eps-down", "value"),
+    ("p-eta-up", "value"),
+    ("p-eta-down", "value"),
+    ("p-epsilon", "value"),
     ("p-q", "value"),
     ("p-benefit", "value"),
     ("p-cost", "value"),
     ("p-advanced", "data"),
     ("p-max-iter", "value"),
-    ("p-max-score", "value"),
 ]
 
 
@@ -61,7 +60,7 @@ def defaults(n=None):
     return {
         "scores": [{"score": 0, "mass": 0.5}, {"score": 1, "mass": 0.5}],
         "norm": spec.norm_from_barcode(list(spec.NORM_PRESETS.values())[0], "binary"),
-        "noise": {"eps": "0.1", "eps_up": "0.5", "eps_down": "0.5"},
+        "noise": {"eta_up": "0.05", "eta_down": "0.05", "epsilon": "0"},
         "interactions": {"p_can": "0.5", "benefit": f"{spec.DEFAULT_ADVANCED['benefit']:g}",
                          "cost": f"{spec.DEFAULT_ADVANCED['cost']:g}"},
         "advanced": advanced_defaults(),
@@ -92,11 +91,14 @@ def form(strategies, params):
                     html.Div(id="p-score-table"),
                 ]),
                 html.Div([
-                    card("Noise", [
+                    card("Token rates and action errors", [
                         html.Div([
-                            field("ε", text_input("p-eps", noise["eps"])),
-                            field("ε↑", text_input("p-eps-up", noise["eps_up"])),
-                            field("ε↓", text_input("p-eps-down", noise["eps_down"])),
+                            field("η↑", text_input("p-eta-up", noise["eta_up"]),
+                                  hint="Rate of gaining a token other than by interaction (0 or more)."),
+                            field("η↓", text_input("p-eta-down", noise["eta_down"]),
+                                  hint="Rate of losing a token, from score 1 up."),
+                            field("ε", text_input("p-epsilon", noise["epsilon"]),
+                                  hint="Probability that a donor does the opposite of what it intends."),
                         ], className="row"),
                         html.Div(id="p-noise-status"),
                     ]),
@@ -112,8 +114,6 @@ def form(strategies, params):
                         html.Div([
                             field("Max iterations", text_input("p-max-iter", adv["max_iter"], mode="numeric"),
                                   hint="Steps of the score chain."),
-                            field("Max score (optional)", text_input("p-max-score", adv.get("max_score", ""), mode="numeric"),
-                                  hint="Leave empty for no cap."),
                         ], className="row"),
                         # The other solver settings (tolerance, arrow grid, whether every chain runs all its
                         # iterations) are not on the page; they are the defaults, or those of a loaded file.
@@ -202,7 +202,7 @@ def register(app):
         *[Input(i, p) for i, p in FORM],
         prevent_initial_call=True,
     )
-    def remember(scores, norm_type, tau, cn, nc, eps, eps_up, eps_down, q, b, c, advanced, max_iter, max_score):
+    def remember(scores, norm_type, tau, cn, nc, eta_up, eta_down, epsilon, q, b, c, advanced, max_iter):
         if not cn:
             return no_update
         bits = "".join(cn or [])
@@ -210,15 +210,15 @@ def register(app):
             "scores": scores or [],
             "norm": {"type": "ternary" if len(bits) == 18 else "binary", "tau": validation.tau(tau)[0],
                      "CN": bits, "NC": "".join(nc or [])},
-            "noise": {"eps": eps, "eps_up": eps_up, "eps_down": eps_down},
+            "noise": {"eta_up": eta_up, "eta_down": eta_down, "epsilon": epsilon},
             "interactions": {"p_can": q, "benefit": b, "cost": c},
-            "advanced": {**(advanced or {}), "max_iter": max_iter, "max_score": max_score},
+            "advanced": {**(advanced or {}), "max_iter": max_iter},
         }
 
     @app.callback(Output("p-noise-status", "children"),
-                  Input("p-eps", "value"), Input("p-eps-up", "value"), Input("p-eps-down", "value"))
-    def check_noise(eps, up, down):
-        _, error = validation.noise(eps, up, down)
+                  Input("p-eta-up", "value"), Input("p-eta-down", "value"), Input("p-epsilon", "value"))
+    def check_noise(eta_up, eta_down, epsilon):
+        _, error = validation.noise(eta_up, eta_down, epsilon)
         return status(error, False) if error else None
 
     @app.callback(Output("p-inter-status", "children"),
@@ -410,17 +410,17 @@ def interactions(q, b, c):
     return {"p_can": q_value, "benefit": b_value, "cost": c_value}, ""
 
 
-def experiment_from_inputs(strategies, scores, norm_type, tau, cn, nc, eps, eps_up, eps_down, q, b, c,
-                           advanced=None, max_iter=None, max_score=None):
+def experiment_from_inputs(strategies, scores, norm_type, tau, cn, nc, eta_up, eta_down, epsilon, q, b, c,
+                           advanced=None, max_iter=None):
     """A validated experiment dict, or the first error message."""
     if not strategies or not 2 <= len(strategies) <= spec.MAX_STRATEGIES:
         return None, "Choose 2 or 3 strategies first."
     w, error = validation.score_distribution(scores or [])
     if error:
         return None, f"Score distribution: {error}"
-    noise, error = validation.noise(eps, eps_up, eps_down)
+    noise, error = validation.noise(eta_up, eta_down, epsilon)
     if error:
-        return None, f"Noise: {error}"
+        return None, f"Token rates: {error}"
     inter, error = interactions(q, b, c)
     if error:
         return None, error
@@ -446,13 +446,6 @@ def experiment_from_inputs(strategies, scores, norm_type, tau, cn, nc, eps, eps_
         numbers[key], error = validation.positive_int(advanced[key], what)
         if error:
             return None, error
-    cap = {}
-    if max_score not in (None, ""):
-        cap["max_score"], error = validation.positive_int(max_score, "Max score")
-        if error:
-            return None, error
-        if max(int(e["score"]) for e in scores) > cap["max_score"]:
-            return None, "Max score is below a score in the initial distribution."
     total = sum(float(e["mass"]) for e in scores)
     experiment = {
         "version": spec.VERSION,
@@ -463,7 +456,6 @@ def experiment_from_inputs(strategies, scores, norm_type, tau, cn, nc, eps, eps_
         **inter,
         "tol": tol_value,
         **numbers,
-        **cap,
         "full_steps": bool(advanced["full_steps"]),
     }
     return experiment, ""

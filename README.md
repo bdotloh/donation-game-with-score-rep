@@ -11,8 +11,10 @@ Models of Indirect Reciprocity*:
 | strategies i, k; frequencies ρ_k | `population.rho[k]` |
 | w_j^(i), **w**₀ | `w[i, j]`, `result.w0` |
 | G_j^(i), F_j^(i) (interactions only) | `rates.G[i, j]`, `rates.F[i, j]` |
-| g_j^(i), f_j^(i) (with noise) | `rates.g[i, j]`, `rates.f[i, j]` |
-| ε, ε↑, ε↓ | `Noise(eps, eps_up, eps_down)` (ε↑ + ε↓ ≤ 1; the notes take it to be 1) |
+| g_j^(i) = G_j + η↑(j), f_j^(i) = F_j + η↓(j), f_0 = 0 | `rates.g[i, j]`, `rates.f[i, j]` |
+| η↑, η↓ (rates of gaining / losing a token other than by interaction; numbers, arrays over j or functions j → rate, ≥ 0) | `Noise(eta_up, eta_down)` |
+| ε (probability a donor does the opposite of what it intends) | `Noise(epsilon=...)`, and `Payoffs(epsilon=...)` |
+| old mixture ε, ε↑, ε↓ | `Noise.from_old(eps, eps_up, eps_down)`: η = ε ε↑/(1 − ε) etc., same stationary distributions, rates 1/(1 − ε) times faster |
 | barcode `CN:… NC:…` | `ScoringNorm.from_barcode(...)` |
 
 `g[i, j]` is the rate from score j-1 to j and `f[i, j]` the rate from j to j-1.
@@ -51,7 +53,7 @@ from engine import *
 
 norm = ScoringNorm.from_barcode("CN:00000-0+ NC:00000000")
 population = Population([PhiDisc(1), Defectors()], rho=[0.9, 0.1])
-solver = StableScoreSolver(norm, Noise(eps=0.1, eps_up=0.4, eps_down=0.6))
+solver = StableScoreSolver(norm, Noise.from_old(0.1, 0.4, 0.6))
 result = solver(population, w_init=[0.5, 0.5])
 
 result.w            # stable score distributions, one row per strategy
@@ -78,7 +80,7 @@ individual can help with probability q (1/4 for q = 1/2, as in `helper_funcs.jl`
 ## Replicator dynamics
 
 ```python
-solver = StableScoreSolver(norm, Noise(eps=0.1, eps_up=0.4, eps_down=0.6), max_iter=1000)
+solver = StableScoreSolver(norm, Noise.from_old(0.1, 0.4, 0.6), max_iter=1000)
 dynamics = ReplicatorDynamics(solver, Payoffs(benefit=2, cost=1), dt=0.1)
 # For runs of a fixed length: StableScoreSolver(..., max_iter=2000, force_max_iter=True, tail_tol=1e-15)
 trajectory = dynamics.run([PhiDisc(1), Defectors()], rho=[0.9, 0.1], w_init=[0.5, 0.5], n_steps=500)
@@ -111,12 +113,11 @@ python -m gui            # then open http://127.0.0.1:8050
    and add it; the 3D plot shows p(help) over receiver and donor scores. Choose
    2 or 3. They are labelled S1, S2, S3 in that order.
 2. **Parameters**: the initial score distribution, scoring norm (binary or ternary, one
-   dropdown per case, a preset, or paste a barcode), noise ε, ε↑, ε↓ (ε↑ + ε↓ = 1),
-   the probability q of being able to help, benefit and cost, the max
-   score iterations (default 2000, all of them run) and an optional max score (empty: no cap; otherwise no
-   score above it exists). The tolerance (1e-6) and the arrow grid (20 points per side) are not on the page
-   (a settings file keeps its own). Defaults: ε = 0.1, ε↑ = ε↓ = 0.5. With ε↑ = ε↓ many populations have no
-   stable score distribution, so values are those after the 2000 iterations. Settings can be saved and
+   dropdown per case, a preset, or paste a barcode), the token rates η↑, η↓ (≥ 0) and the action error ε, the probability q of being able to help, benefit and cost, the max
+   score iterations (default 2000, all of them run). Scores have no cap. The tolerance (1e-6) and the arrow
+   grid (20 points per side) are not on the page (a settings file keeps its own). Defaults: η↑ = η↓ = 0.05,
+   ε = 0. With η↑ ≥ η↓ many populations have no stable score distribution, so values are those after the 2000
+   iterations. Settings files with the old ε, ε↑, ε↓ are converted with `Noise.from_old`. Settings can be saved and
    loaded as JSON.
 3. **Results**, in three rows. Row 1 (it can be folded away): the strategies as S1, S2, S3 in the colours of
    the plots, with their decision tables (p(help) for each class of receiver and donor; φ-Disc by donor

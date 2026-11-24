@@ -43,7 +43,7 @@ def phi_disc_gamma_solution(n_scores=400):
 def figure_phi_disc():
     analytic = phi_disc_gamma_solution()
     norm = ScoringNorm.from_barcode("CN:00000-0+ NC:00000000")
-    solver = StableScoreSolver(norm, Noise(EPS, EPS_UP, EPS_DOWN), max_iter=2000, force_max_iter=True,
+    solver = StableScoreSolver(norm, Noise.from_old(EPS, EPS_UP, EPS_DOWN), max_iter=2000, force_max_iter=True,
                                stop_when_transient=False)
     w = solver(Population([PhiDisc(1.0)]), [1.0]).w[0]
     n = min(len(w), len(analytic))
@@ -74,7 +74,7 @@ def figure_defectors_disc():
     analytic = [(1 - ri) * ri**j for ri in r]
     norm = ScoringNorm.from_barcode("CN:00000-00 NC:00000000")
     population = Population([Defectors(), Discriminators()], rho=[0.5, 0.5])
-    solver = StableScoreSolver(norm, Noise(eps, eu, ed), max_iter=2000, force_max_iter=True,
+    solver = StableScoreSolver(norm, Noise.from_old(eps, eu, ed), max_iter=2000, force_max_iter=True,
                                stop_when_transient=False)
     w = solver(population, [0.5, 0.5]).w
     errors = [np.abs(w[i, :21] - analytic[i]) for i in range(2)]

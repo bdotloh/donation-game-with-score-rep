@@ -223,11 +223,12 @@ if __name__ == "__main__":
     benefit = 2
     cost = 1
     fit_threshold = 0.01
-    noise = Noise.from_noise_val(0.0)   # NOISE_VAL in make_datas.jl
+    noise_val = 0.0               # NOISE_VAL in make_datas.jl
+    noise = Noise.from_old(noise_val)
 
     print(f"BigBs: {len(bigb_names)}")
     print(f"ESS options and invaders: {len(strategy_options)}")
-    print(f"Noise: {noise.eps:g}")
+    print(f"Noise: {noise_val:g}")
     print(f"maxn: {maxn}")
 
     start_time = time.time()
@@ -247,4 +248,4 @@ if __name__ == "__main__":
     )
     end_time = time.time()
     print(f"Total runtime: {end_time - start_time:.3f} seconds")
-    save_results_csv(results, f"tokens_CmeetsN_Noise{noise.eps:g}_B{benefit}.csv")
+    save_results_csv(results, f"tokens_CmeetsN_Noise{noise_val:g}_B{benefit}.csv")

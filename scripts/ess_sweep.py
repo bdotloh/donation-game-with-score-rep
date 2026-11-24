@@ -158,7 +158,7 @@ class Sweep:
         self.norms = NormSet(args.norms, args.tau)
         self.candidates = strategy_set(args.strategies, args.tau)
         self.invaders = strategy_set(args.invaders, args.tau) if args.invaders else self.candidates
-        self.noise = Noise(args.eps, args.eps_up, args.eps_down)
+        self.noise = Noise.from_old(args.eps, args.eps_up, args.eps_down)
         self.w_init = np.array([float(x) for x in args.w_init.split(",")])
         self.args = args
 

@@ -45,7 +45,7 @@ class Model:
 
     def __init__(self, a, family):
         roles = role_factor(a.q)
-        self.solver = StableScoreSolver(ScoringNorm.from_barcode(a.norm), Noise(a.eps, a.eps_up, a.eps_down), tol=a.tol,
+        self.solver = StableScoreSolver(ScoringNorm.from_barcode(a.norm), Noise.from_old(a.eps, a.eps_up, a.eps_down), tol=a.tol,
                                         max_iter=a.maxn, role_factor=roles, tail_tol=a.tail_tol)
         if a.settle_tol:
             self.solver = SettledSolver(self.solver, tol=a.settle_tol, max_iter=a.settle_iter)

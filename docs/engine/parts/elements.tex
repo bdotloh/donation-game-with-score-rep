@@ -195,28 +195,35 @@ tau & int or \code{None} & \code{NamedNorm.norm(tau)}: lift the binary norm to a
 \ex{named_norms}
 
 %--------------------------------------------------------------------------
-\subsection{Noise}\label{sec:noise}\emph{module} \code{engine/noise.py}
+\subsection{Token rates and action errors}\label{sec:noise}\emph{module} \code{engine/noise.py}
 
 \subsubsection{\texttt{Noise}}
 
 \whatit
-Random score changes on top of the norm: with probability $\varepsilon$ an update is replaced by a random one, upwards
-with probability $\varepsilon_\uparrow$ and downwards with $\varepsilon_\downarrow$.
+Two things that are not the norm: score changes that no interaction causes, at rates $\eta_\uparrow(j)$ (gaining a token
+at score $j$) and $\eta_\downarrow(j)$ (losing one), and errors in the donors' actions, with probability $\varepsilon$ a
+donor does the opposite of what it intends.
 
 \howit
 An immutable record that checks its values. The transition rates $G,F$ from interactions alone become
 \[
- g=(1-\varepsilon)\,G+\varepsilon\,\varepsilon_\uparrow,\qquad f=(1-\varepsilon)\,F+\varepsilon\,\varepsilon_\downarrow
+ g_j=G_j+\eta_\uparrow(j)\ (j\ge0),\qquad f_j=F_j+\eta_\downarrow(j)\ (j\ge1),\qquad f_0=0
 \]
-(applied in \code{TransitionRates}, section~\ref{sec:rates}; a score of $0$ never goes down). \code{ValueError} if a value is
-outside $[0,1]$ or $\varepsilon_\uparrow+\varepsilon_\downarrow>1$ (the notes take the sum to be 1; a sum below 1 just
-leaves some noise doing nothing). \code{Noise.from\_noise\_val(v)} is $\varepsilon=v$, $\varepsilon_\uparrow=\varepsilon_\downarrow=\tfrac12$.
+(applied in \code{TransitionRates}, section~\ref{sec:rates}). The $\eta$ are rates, not probabilities: they need not lie in
+$[0,1]$ or sum to 1, only be $\ge0$ (\code{ValueError} otherwise). Each is a number, an array over the scores (its last
+value holds for higher scores) or a function \code{j -> rate}, for example \code{lambda j: 0.01 * j}; a function is
+evaluated once per score and the table kept. There is no cap on the score. Action errors act inside $G$ and $F$ (and the
+payoffs) through the help probability $h$: $h_{\mathrm{eff}}=(1-\varepsilon)h+\varepsilon(1-h)$, \code{noise.act(h)}.
+\code{Noise.from\_old(eps, eps\_up, eps\_down)} turns the old mixture $g=(1-\varepsilon)G+\varepsilon\varepsilon_\uparrow$,
+$f=(1-\varepsilon)F+\varepsilon\varepsilon_\downarrow$ into $\eta=\varepsilon\varepsilon_{\uparrow/\downarrow}/(1-\varepsilon)$: the new $g,f$ are the old ones
+divided by $1-\varepsilon$, so $g_{j-1}/f_j$ and every stationary distribution are the same, and with the same $\lambda$
+the chain runs $1/(1-\varepsilon)$ times faster (multiply $\lambda$ and both $\eta$ by $1-\varepsilon$ for the old speed).
 
 \paramsh
 \begin{params}
-eps & float in $[0,1]$, \code{0.0} & the noise level $\varepsilon$.\\
-eps\_up & float in $[0,1]$, \code{0.5} & share of noise that moves a score up.\\
-eps\_down & float in $[0,1]$, \code{0.5} & share of noise that moves a score down.\\
+eta\_up & number, array or function, \code{0.0} & $\eta_\uparrow$, the rate of gaining a token at score $j$.\\
+eta\_down & number, array or function, \code{0.0} & $\eta_\downarrow$, the rate of losing one (not used at score 0).\\
+epsilon & float in $[0,1]$, \code{0.0} & probability that a donor's action is the opposite of the intended one.\\
 \end{params}
 
 \exh

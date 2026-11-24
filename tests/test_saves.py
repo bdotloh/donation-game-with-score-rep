@@ -17,7 +17,7 @@ def small_run(n=3):
         strategies.append({"type": "phi", "name": "phi", "P": None, "tau": None, "phi": 1.0})
     experiment, error = experiment_from_inputs(
         strategies, [{"score": 0, "mass": 0.5}, {"score": 1, "mass": 0.5}], "binary", None,
-        list("00000-0+"), list("00000000"), "0.1", "0.4", "0.6", "0.5", "2", "1",
+        list("00000-0+"), list("00000000"), "0.04", "0.06", "0", "0.5", "2", "1",
         {"max_iter": "60", "tol": "1e-5", "resolution": "3", "full_steps": True})
     assert error == ""
     run = Run(experiment)
@@ -141,7 +141,7 @@ def test_the_file_is_plain_tables_that_can_be_queried(run, tmp_path):
     ).fetchone()
     assert stored == tail_start <= n_scores
     assert db.execute("select min(probability) from score_distribution where score = 0").fetchone()[0] >= 0
-    assert dict(db.execute("select key, value from settings"))["noise.eps"] == "0.1"
+    assert dict(db.execute("select key, value from settings"))["noise.eta_up"] == "0.04"
 
 
 def test_the_tail_below_the_cutoff_is_not_stored(tmp_path):

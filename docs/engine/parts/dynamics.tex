@@ -27,6 +27,7 @@ interaction, role factor included.
 benefit & float, \code{2.0} & $b$, what a receiver gains.\\
 cost & float, \code{1.0} & $c$, what a donor pays.\\
 role\_factor & float, \code{0.25} & $\kappa$.\\
+epsilon & float in $[0,1]$, \code{0.0} & probability that a donor does the opposite of what it intends; $H$ uses $(1-\varepsilon)h+\varepsilon(1-h)$ (give the same $\varepsilon$ as in \code{Noise}).\\
 population, w & & \code{help\_probabilities(population, w)} returns $H$; \code{payoffs(population, w)} returns $\pi$ ($w$: the $n\times L$ score distributions).\\
 \end{params}
 

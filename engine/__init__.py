@@ -3,7 +3,7 @@
 Notation follows "Calculating the Stable Reputation Distribution in Infinite
 Population Models of Indirect Reciprocity": scores j in {0, 1, ...},
 strategies i, k with frequencies rho, score distributions w[i, j] = w_j^(i),
-rates G, F (interactions only) and g, f (with noise eps, eps_up, eps_down).
+rates G, F (interactions only) and g, f (with the token rates eta_up, eta_down added).
 """
 
 from .ess import ESSFinder

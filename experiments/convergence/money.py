@@ -36,7 +36,7 @@ norm = ScoringNorm.from_barcode("CN:000000++ NC:000000--")
 eps = 0.1
 eps_up = 0.49
 eps_down = 1-eps_up
-noise = Noise(eps=eps, eps_up=eps_up, eps_down=eps_down)
+noise = Noise.from_old(eps, eps_up, eps_down)
 benefit, cost = 2.0, 1.0
 payoffs = Payoffs(benefit=benefit, cost=cost)
 tol = 1e-10

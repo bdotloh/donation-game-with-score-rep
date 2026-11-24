@@ -178,11 +178,11 @@ def _full_flow(page):
     assert page.input_value("#p-norm-tau") == "2"
     choose(page, "p-norm-preset", "Lose a score for not helping someone with a score")
     page.wait_for_function("document.querySelector('#p-barcode').value === 'CN:00000-00 NC:00000000'")
-    set_text(page, "#p-eps", "0.1")
-    set_text(page, "#p-eps-up", "0.4")
-    set_text(page, "#p-eps-down", "0.5")
+    set_text(page, "#p-eta-up", "0.04")
+    set_text(page, "#p-eta-down", "0.06")
+    set_text(page, "#p-epsilon", "1.5")
     page.wait_for_selector("#p-noise-status .status.error")
-    set_text(page, "#p-eps-down", "0.6")
+    set_text(page, "#p-epsilon", "0")
     page.wait_for_function("document.querySelector('#p-noise-status').innerText === ''")
     assert page.locator(".advanced").count() == 0 and page.locator("#p-maxiter").count() == 0   # no Advanced section
     shot(page, "2_parameters")
@@ -264,9 +264,9 @@ def _full_flow(page):
     page.click("#r-back")
     page.wait_for_selector("#p-to-results", state="visible")
     assert page.inner_text("#p-results-note") == ""                  # nothing changed since the run
-    set_text(page, "#p-eps", "0.2")
+    set_text(page, "#p-eta-up", "0.2")
     page.wait_for_function("document.querySelector('#p-results-note').innerText.includes('last run')")
-    set_text(page, "#p-eps", "0.1")
+    set_text(page, "#p-eta-up", "0.04")
     page.wait_for_function("document.querySelector('#p-results-note').innerText === ''")
     page.click("#p-to-results")
     page.wait_for_selector("#r-body:not([style*='none'])", timeout=60_000)
