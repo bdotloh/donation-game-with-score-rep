@@ -44,9 +44,10 @@ def test_hand_computed_cases():
     st = TernaryStrategy.from_name("0,0,0|0,0,0|0,g,0", 2)
     r = rates(norm3({(2,1,1):'+'}, {}, 2), [st], [1.], w4); check("E2 CN tau=2", r.G[0,1:5], [0, .175, 0, 0])
     r = rates(norm3({}, {(2,1,1):'+'}, 2), [st], [1.], w4); check("E2 NC tau=2", r.G[0,1:5], [0, 0, .05, .05])
-    # noise arithmetic: g = (1-eps)G + eps*up ; f = (1-eps)F + eps*down, nothing down from 0
+    # additive rates: Noise.from_old(eps, up, down) has g = G + eps*up/(1-eps), f = F + eps*down/(1-eps), nothing down
+    # from 0 (the old mixture (1-eps)G + eps*up divided by 1-eps)
     r = rates(norm3({(2,0,1):'-'}, {}, 2), [D3(2)], [1.], w4, eps=.2, up=.3, down=.7)
-    check("noise f", r.f[0,:4], [0, .8*.175+.14, .14, .14]); check("noise g", r.g[0,1:4], [.06]*3)
+    check("noise f", r.f[0,:4], [0, .175+.175, .175, .175]); check("noise g", r.g[0,1:4], [.075]*3)
     # C: phi-Disc, two strategies. phi-Disc rho .5 w0=.2 ; Defectors rho .5 w0=.6; need pos mass = .5*.8+.5*.4=.6
     cnphi = ScoringNorm.from_barcode("CN:00000-0+ NC:00000000")
     w = np.zeros((2, 5)); w[0] = [.2, .1, .2, .3, .2]; w[1] = [.6, .4, 0, 0, 0]

@@ -6,6 +6,9 @@ a token by other means: they are rates, not probabilities (they need not lie in 
 Each is a number, an array over the scores (the last value holds for higher scores) or a function j -> rate,
 for example eta_down = lambda j: 0.01 * j.
 
+One solver step is one unit of time, so keep the total rate out of a score (G + F + eta_up + eta_down) below 1;
+above 1 a step can leave a score with negative mass.
+
 epsilon is the probability that a donor's action is the opposite of the intended one: the help probability
 becomes (1 - epsilon) help + epsilon (1 - help).
 """

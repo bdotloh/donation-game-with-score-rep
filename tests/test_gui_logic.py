@@ -103,7 +103,7 @@ def test_experiment_errors():
 
 def test_max_iter_input():
     strategies = [spec.preset_strategy("AllD-Disc"), spec.preset_strategy("Defectors")]
-    args = [[{"score": 0, "mass": 1.0}, {"score": 3, "mass": 1.0}], "binary", None, list("00000-00"), list("00000000"),
+    args = [[{"score": 0, "mass": 0.5}, {"score": 3, "mass": 0.5}], "binary", None, list("00000-00"), list("00000000"),
             "0.04", "0.06", "0", "0.5", "2", "1", {"max_iter": "200"}]
     experiment, error = experiment_from_inputs(strategies, *args, "50")
     assert error == "" and experiment["max_iter"] == 50 and "max_score" not in experiment

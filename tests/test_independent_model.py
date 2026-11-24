@@ -52,7 +52,7 @@ def rand_spec(rng, kind=None, n=None, tau=None):
         rho[rng.integers(n)] = 0.0
         rho = rho / rho.sum() if rho.sum() > 0 else np.ones(n) / n
     eu = float(rng.uniform())
-    return dict(norm=norm, strats=strats, rho=rho.tolist(), noise=(float(rng.choice([0.0, 0.1, 0.5, 0.9])), eu, 1 - eu))
+    return dict(norm=norm, strats=strats, rho=rho.tolist(), noise=(float(rng.choice([0.0, 0.1, 0.3, 0.5])), eu, 1 - eu))
 
 def rand_w(rng, n, tau):
     L = int(rng.integers(1, 15))
@@ -203,7 +203,7 @@ def test_stationary_is_invariant_under_one_engine_step():
 def test_engine_converges_to_oracle_stationary():
     rng = np.random.default_rng(7); n_checked = 0
     for _ in range(40):
-        spec = rand_spec(rng, n=2); eu = 0.3 * rng.random(); spec['noise'] = (float(rng.choice([0.5, 0.9])), eu, 1 - eu)
+        spec = rand_spec(rng, n=2); eu = 0.3 * rng.random(); spec['noise'] = (float(rng.choice([0.3, 0.5])), eu, 1 - eu)
         w, s, nm = stable_oracle(spec, S=80)
         if w is None: continue
         pop, norm, noise = engine(spec)
@@ -237,7 +237,7 @@ def phi_rates_notes(w0, phi, eps, eu, ed, L):
 def test_phi_disc_rates_match_page7():
     rng = np.random.default_rng(8); norm = E.ScoringNorm.from_barcode('CN:00000-0+ NC:00000000')
     for _ in range(200):
-        phi, L = float(rng.uniform(0, 3)), int(rng.integers(2, 25)); eps, eu = float(rng.choice([0, 0.1, 0.5, 0.9])), float(rng.random())
+        phi, L = float(rng.uniform(0, 3)), int(rng.integers(2, 25)); eps, eu = float(rng.choice([0, 0.1, 0.3, 0.5])), float(rng.random())
         w = rng.random((1, L)); w /= w.sum()
         R = E.TransitionRates(norm, E.Noise.from_old(eps, eu, 1 - eu))(E.Population([E.PhiDisc(phi)], rho=[1.0]), w)
         g, f = phi_rates_notes(w[0, 0], phi, eps, eu, 1 - eu, L)
@@ -253,7 +253,7 @@ def phi1_gamma(eps, eu, ed):
     pi = np.concatenate([[pi0], pi0 * terms(pi0)])
     return pi0, pi, (pi * np.arange(len(pi))).sum()
 
-@pytest.mark.parametrize('eps, eu', [(0.1, 0.4), (0.1, 0.2), (0.3, 0.5), (0.5, 0.1), (0.9, 0.3)])
+@pytest.mark.parametrize('eps, eu', [(0.1, 0.4), (0.1, 0.2), (0.3, 0.5), (0.5, 0.1), (0.5, 0.3)])
 def test_phi1_gamma_solution(eps, eu):
     pi0, pi, mean = phi1_gamma(eps, eu, 1 - eu)
     if (eps, eu) == (0.1, 0.4):
@@ -267,7 +267,7 @@ def test_phi1_gamma_solution(eps, eu):
 def test_phi0_is_discriminators():
     rng = np.random.default_rng(9)
     for _ in range(50):
-        norm = E.ScoringNorm.from_barcode(rand_barcode(rng, 2)); noise = E.Noise.from_old(float(rng.choice([0, 0.2, 0.9])), 0.3, 0.7)
+        norm = E.ScoringNorm.from_barcode(rand_barcode(rng, 2)); noise = E.Noise.from_old(float(rng.choice([0, 0.2, 0.5])), 0.3, 0.7)
         w = rng.random((2, 9)); w /= w.sum(1, keepdims=True)
         R = [E.TransitionRates(norm, noise)(E.Population([a, E.Defectors()], rho=[0.4, 0.6]), w) for a in (E.PhiDisc(0), E.Discriminators())]
         assert all(np.abs(getattr(R[0], k) - getattr(R[1], k)).max() < 1e-15 for k in 'gfGF')
@@ -293,7 +293,7 @@ def segment_pi(u, d, tau):
 def test_ternary_class_based_single_strategy_three_segments():
     rng = np.random.default_rng(10); n_checked = 0
     for _ in range(60):
-        tau = int(rng.choice(TAUS)); eu = float(rng.uniform(0.05, 0.5)); noise = (float(rng.choice([0.2, 0.5, 0.9])), eu, 1 - eu)
+        tau = int(rng.choice(TAUS)); eu = float(rng.uniform(0.05, 0.5)); noise = (float(rng.choice([0.2, 0.3, 0.5])), eu, 1 - eu)
         spec = dict(norm=(rand_barcode(rng, 3), tau, False), strats=[('ter', rand_table(rng, 3, 0.5), tau)], rho=[1.0], noise=noise)
         s, nm = mine(spec)
         def resid(m):

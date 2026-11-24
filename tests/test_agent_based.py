@@ -103,8 +103,10 @@ def engine_w(strategies, rho, norm, tau, eps, eps_up, eps_down, w_init, t, **sol
             objs.append(BinaryStrategy.from_name(spec))
         else:
             objs.append(TernaryStrategy.from_name(spec, tau))
-    solver = StableScoreSolver(ScoringNorm.from_barcode(norm, tau=tau), Noise.from_old(eps, eps_up, eps_down), tol=1e-5,
-                               max_iter=t, force_max_iter=True, **solver_kw)
+    # The simulation changes a score with probability (1 - eps) G + eps eps_ud each step: as additive rates that is
+    # eta = eps eps_ud with lambda = (1 - eps) / 4 (Noise.from_old keeps the stationary distributions, not the speed).
+    solver = StableScoreSolver(ScoringNorm.from_barcode(norm, tau=tau), Noise(eta_up=eps * eps_up, eta_down=eps * eps_down),
+                               tol=1e-5, max_iter=t, force_max_iter=True, role_factor=0.25 * (1 - eps), **solver_kw)
     return np.asarray(solver(Population(objs, rho=list(rho)), np.tile(np.asarray(w_init, float), (len(objs), 1))).w)
 
 
