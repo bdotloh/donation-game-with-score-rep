@@ -122,7 +122,7 @@ def test_defectors_vs_discriminators():
 
 def test_phi_disc_population_phi_1():
     """Section III.A: a population of 1-Disc, whose stable distribution is given by gamma functions."""
-    eps, eps_up, eps_down = 0.5, 0.2, 0.4
+    eps, eps_up, eps_down = 0.3, 0.2, 0.4
     norm = ScoringNorm.from_barcode("CN:00000-0+ NC:00000000")
     population = Population([PhiDisc(phi=1)])
     result = tight_solver(norm, Noise.from_old(eps, eps_up, eps_down))(population, [0.5, 0.5])
@@ -208,7 +208,7 @@ def test_rates_and_payoffs_are_linear_in_help_probabilities(barcode):
 def test_stable_distribution_satisfies_detailed_balance():
     norm = ScoringNorm.from_barcode("CN:0+0+0-0+ NC:0000+-0-")
     population = Population([PhiDisc(1.5), TernaryStrategy.from_name("0,0,0|0,g,0.5|g,g,g", tau=3)], [0.5, 0.5])
-    result = tight_solver(norm, Noise.from_old(0.6, 0.1, 0.6))(population, [0.5, 0.5])
+    result = tight_solver(norm, Noise.from_old(0.2, 0.1, 0.6))(population, [0.5, 0.5])
     assert result.converged
     for i in range(population.n):
         pi = chain.stationary(result.rates.g[i, :-1], result.rates.f[i])
@@ -276,12 +276,15 @@ def test_tail_trimming_barely_changes_results():
     np.testing.assert_allclose(Payoffs()(population, trimmed.w), Payoffs()(population, exact.w), atol=1e-12)
 
 
-def test_noise_rejects_up_and_down_rates_that_add_to_more_than_one():
+def test_token_rates_are_rates_not_probabilities():
     Noise.from_old(0.1, 0.4, 0.6)
-    Noise.from_old(0.1, 0.2, 0.4)                       # less than one is allowed
-    for bad in ((1, 1, 1), (0.1, 0.6, 0.6), (0.1, 0.5, 0.5000001)):
-        with pytest.raises(ValueError, match="eps_up"):
+    Noise.from_old(0.1, 0.2, 0.4)
+    Noise(eta_up=0.6, eta_down=1.7)                     # they need not add up to 1 or stay below 1
+    for bad in ((1.0, 0.5, 0.5), (-0.1, 0.5, 0.5)):
+        with pytest.raises(ValueError, match="eps"):
             Noise.from_old(*bad)
+    with pytest.raises(ValueError, match="eta_down"):
+        Noise(eta_down=-1.0)
 
 
 def test_phi_disc_can_help_at_score_zero():
