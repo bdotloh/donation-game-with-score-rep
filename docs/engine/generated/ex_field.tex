@@ -15,7 +15,7 @@ for p in find_rest_points(field.velocity, n=2, resolution=8, neutral_tol=1e-6):
     print(p.location, p.kind, p.rho)
 \end{lstlisting}
 \begin{lstlisting}[style=output]
-[ 0.0071 -0.0071] [0.042 0.008]
+[ 0.0072 -0.0072] [0.0421 0.008 ]
 [[1.   0.  ]
  [0.75 0.25]
  [0.5  0.5 ]
@@ -23,5 +23,5 @@ for p in find_rest_points(field.velocity, n=2, resolution=8, neutral_tol=1e-6):
  [0.   1.  ]]
 vertex stable [1. 0.]
 vertex stable [0. 1.]
-interior unstable [0.1307 0.8693]
+interior unstable [0.1305 0.8695]
 \end{lstlisting}

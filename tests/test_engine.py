@@ -208,7 +208,9 @@ def test_rates_and_payoffs_are_linear_in_help_probabilities(barcode):
 def test_stable_distribution_satisfies_detailed_balance():
     norm = ScoringNorm.from_barcode("CN:0+0+0-0+ NC:0000+-0-")
     population = Population([PhiDisc(1.5), TernaryStrategy.from_name("0,0,0|0,g,0.5|g,g,g", tau=3)], [0.5, 0.5])
-    result = tight_solver(norm, Noise.from_old(0.2, 0.1, 0.6))(population, [0.5, 0.5])
+    # eta = 0.6 * (0.1, 0.6) and lambda = 0.4 / 4: the rates of the old mixture with eps = 0.6, eps_up = 0.1, eps_down = 0.6
+    solver = StableScoreSolver(norm, Noise(eta_up=0.06, eta_down=0.36), tol=1e-14, max_iter=200_000, role_factor=0.1)
+    result = solver(population, [0.5, 0.5])
     assert result.converged
     for i in range(population.n):
         pi = chain.stationary(result.rates.g[i, :-1], result.rates.f[i])

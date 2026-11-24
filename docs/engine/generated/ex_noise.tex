@@ -1,14 +1,18 @@
 \begin{lstlisting}[style=code]
 from engine import Noise
 
-noise = Noise.from_old(0.1, 0.4, 0.6)
-print(noise)
+noise = Noise(eta_up=0.04, eta_down=lambda j: 0.01 * j, epsilon=0.1)    # the loss rate grows with the score
+print(noise.up(4), noise.down(4))
+print(noise.act(0.0), noise.act(1.0))
+print(Noise.from_old(0.1, 0.49, 0.51))                                  # the old mixture, as additive rates
 try:
-    Noise.from_old(0.1, 0.7, 0.6)
+    Noise(eta_up=-0.1)
 except ValueError as error:
     print("ValueError:", error)
 \end{lstlisting}
 \begin{lstlisting}[style=output]
-Noise.from_old(0.1, 0.4, 0.6)
-ValueError: eps_up + eps_down must not exceed 1 (the notes take it to be 1); got 0.7 + 0.6.
+[0.04 0.04 0.04 0.04] [0.   0.01 0.02 0.03]
+0.1 0.9
+Noise(eta_up=0.05444444444444445, eta_down=0.05666666666666667, epsilon=0.0)
+ValueError: eta_up must be a number >= 0, a 1-D array of them or a function of the score; got -0.1.
 \end{lstlisting}
